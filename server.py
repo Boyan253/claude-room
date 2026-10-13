@@ -65,6 +65,7 @@ PINS = os.path.join(ROOT, "pins.json")       # things pinned onto chat messages
 PEOPLE_LOG = os.path.join(ROOT, "people.jsonl")   # the people's own chat (Claude doesn't read it)
 TIMELINE = os.path.join(ROOT, "timeline.json")   # the project's story: moments with pictures, cards, sketches, notes
 TL_KINDS = ("milestone", "feature", "fix", "bug", "idea", "decision", "playtest", "art")
+OPERATOR_DIR = os.path.join(ROOT, "operator")   # control threads: requests for the host's Claude Code and its replies
 ZONES = os.path.join(ROOT, "zones.json")          # places in the map a thread depends on or works in
 ZONE_TTL = 12 * 3600   # a working area or folder lasts 12 h unless it is added again; keep-clear zones stay
 NOTES = os.path.join(ROOT, "notes.json")          # each thread's goal and summary, when people were last here, secrets found
@@ -795,6 +796,14 @@ RELEASE_NOTES = {   # shown with "update available" in the browser and the termi
     23: "Timeline tab: the project's story with pictures, cards, sketches and notes. Add a moment from any chat message (📌 → Timeline) or card; cards reaching Done add themselves. /timeline in the terminal.",
     22: "Long conversations compact themselves (above 200k tokens; /compact does it now). Every request re-reads the whole conversation, so this saves a lot of usage. Sizes are in the usage panel.",
     21: "Claude usage in the top bar: how much of the session and the week is used, and when each resets (terminal: status line and /usage).",
+    44: "Approvals survive a terminal restart (they're asked again in the reopened window), and you can take a message back: 🗑 on your own message (or /unsend for your last one) also stops Claude working on it.",
+    43: "The status line under the message box shows only your own working threads, with a tip about the room while one or none works.",
+    42: "A playtest or editor change on one person's PC is only reported to that person's threads, so the other person's threads no longer think they must wait or stop a playtest.",
+    41: "The Claude usage warning comes once per threshold (80%, 95%) and window instead of every few minutes.",
+    40: "/operator turns a thread into a control thread answered by the host's own Claude Code (for things like reverting a check-in); /operator off switches it back.",
+    39: "✅ for a finished task now sits on the AI's answer; mute the approval sound just for you (Settings, or /sound approvals off in chat.py); the host can clear the people chat (🧹).",
+    38: "A thread's goal now comes from its card; the terminal never updates itself in the middle of an action, and commands that only read no longer wait behind another thread's long change.",
+    37: "One compact row above the message box: a thread switcher with every thread (and how many work or finished), pins behind 📌, ⤢ for the full rows.",
     36: "Pins and threads tidy themselves: a finished card leaves the pins (its pictures go to the timeline), idle threads are archived and can be reopened from the Overview.",
     35: "Threads work as a team: a thread can open its own sub-threads for parts of a task (you see them and can talk to them), get their reports back, keep a checklist, and save lessons every thread learns from.",
     33: "Zones: threads mark the spots they depend on (spawns, the key, camera marks) and nobody can build over them; the playtest log is watched; Check In, Sync and closing UEFN wait while other threads work.",
@@ -805,7 +814,7 @@ RELEASE_NOTES = {   # shown with "update available" in the browser and the termi
 }
 CHANGING_TOOLS = ("write_file", "run_command", "uefn_call", "file_get")
 READ_UEFN = re.compile(r"^(get|list|find|describe|read|query|search|inspect|count|is|has|can|lookup|print|dump|validate)", re.I)   # same as chat.py
-ROOM_VERSION = 44   # shown on the page, next to the name and in Settings
+ROOM_VERSION = 54   # shown on the page, next to the name and in Settings
 BROWSER_ANSWER_VERSION = 5   # oldest chat.py that accepts y / n / a clicked in the browser
 UPDATE_COMMAND_VERSION = 7   # oldest chat.py with /update
 
@@ -1073,6 +1082,8 @@ class Room:
                     if not queued:
                         self.pending.pop(lane, None)
                         self.first_pending.pop(lane, None)
+        if ev["t"] == "msg" and seen and who == author:   # Claude already has it: take it back from the running turn
+            self.take_back(ev.get("lane") or author, ev.get("text") or "", who)
         with self.pins_lock:
             if any(p["target"] == mid for p in self.pins):
                 self.pins = [p for p in self.pins if p["target"] != mid]
@@ -1097,6 +1108,50 @@ class Room:
             self.deleted = (self.deleted + [{"ts": time.time(), "text": what}])[-20:]
         self.broadcast({"t": "del", "id": mid, "by": who})
         return True, "deleted"
+
+    def take_back(self, lane, text, who):
+        """`who` deleted their own message that Claude already has: a running turn only that message started is
+        stopped; a running turn that has other messages too is told to ignore it (a finished one hears it next turn)."""
+        with self.lock:
+            b = self.busy.get(lane)
+            texts = list((b or {}).get("texts") or [])
+            proc = self.procs.get(lane)
+        if not b or b.get("compacting"):
+            return
+        if texts and all(t == text for t in texts) and proc and proc.poll() is None:
+            with self.lock:
+                self.halted.add(lane)
+            for entry in list(self.execs.values()):
+                if entry["lane"] == lane:
+                    entry["result"] = (False, "stopped by the room")
+                    entry["started"].set()
+                    entry["done"].set()
+            self.stopping.add(lane)
+            kill_tree(proc)
+            self.broadcast({"t": "sys", "text": f"↩ {who} took back their message, so {self.lane_label(lane)} stopped"}, keep=True)
+        else:
+            self.inject(lane, f"[room] {who} took back their message “{clip(text, 300)}”: ignore it and carry on with "
+                              "the rest of the task.", kind="note")
+            self.broadcast({"t": "sys", "text": f"↩ {who} took back a message; {self.lane_label(lane)} was told to ignore it"},
+                           keep=True)
+
+    def redeliver_execs(self, name):
+        """Approvals waiting for `name` whose terminal went away (it restarted to update, or reconnected) go to the
+        terminal connected now, so the y / n / a prompt isn't lost."""
+        with self.lock:
+            agent = self.agents.get(name)
+            live = {id(q) for _, q in self.clients}
+        if not agent:
+            return
+        for entry in list(self.execs.values()):
+            if (entry["user"] != name or entry["started"].is_set() or not entry.get("msg")
+                    or entry.get("q") is agent["q"] or id(entry.get("q")) in live):
+                continue
+            left = entry.get("until", 0) - time.time()
+            if left < 3:
+                continue
+            entry["q"] = agent["q"]
+            agent["q"].put({**entry["msg"], "timeout": left})
 
     def broadcast(self, event, keep=False):
         if keep:
@@ -1182,7 +1237,7 @@ class Room:
                 return True, target
             if owner(target) != name:
                 return False, "only its owner can say what a thread is for"
-            self.set_lane_meta(target, goal=clean_text(body.get("goal"), 400))
+            self.set_lane_meta(target, goal=clean_text(body.get("goal"), 400), goal_auto=False)
             self.broadcast({"t": "lane_meta", "meta": self.lane_meta_all()})
             return True, target
         with self.state_lock:
@@ -1214,6 +1269,25 @@ class Room:
         return False, f"unknown thread op {op!r}"
 
     # ---- tidying: finished cards leave the pins, idle threads are archived ----
+    def goal_from_card(self, lane):
+        """A goal the room took from the thread's first message gives way to its open card's title."""
+        m = self.lane_meta(lane)
+        if m.get("goal") and not m.get("goal_auto", True):
+            return False   # typed by hand: keep it
+        cards = self.lane_cards(lane)
+        if not cards:
+            return False
+        goal = f"#{cards[0].get('num')} {cards[0]['title']}"
+        if goal != m.get("goal"):
+            self.set_lane_meta(lane, goal=goal, goal_auto=True)
+            return True
+        return False
+
+    def refresh_goals(self):
+        changed = [lane for lane in list(self.lane_meta_all()) if self.goal_from_card(lane)]
+        if changed:
+            self.broadcast({"t": "lane_meta", "meta": self.lane_meta_all()})
+
     def card_finished(self, who, card_id, moment):
         """A card reached Done: every thread unpins it; the pictures a thread pinned for it go onto its moment."""
         added, lanes = 0, []
@@ -1591,15 +1665,19 @@ class Room:
         if woken:
             self.broadcast({"t": "sys", "text": "🎮 UEFN is free on " + name + "'s PC: " + ", ".join(woken) + " carry on"}, keep=True)
 
-    def lease_lines(self):
+    def lease_lines(self, lane=None):
+        """The playtests in progress; for a thread, only the one on its own person's PC (the hold is per PC)."""
         with self.lock:
             leases = dict(self.leases)
+        if lane:
+            leases = {n: l for n, l in leases.items() if n == owner(lane)}
         out = []
         for name, l in sorted(leases.items()):
             how = "testing now" if l["state"] == "running" else f"left running for {name} to look at"
             out.append(f"[room] {name}'s UEFN playtest belongs to the thread {self.lane_label(l['lane'])} since "
                        f"{time.strftime('%H:%M', time.localtime(l['since']))} ({how}): only that thread may start/stop sessions, "
-                       f"push, BuildAll or change {name}'s editor until it calls StopSession or {name} clicks Done testing.")
+                       f"push, BuildAll or change {name}'s editor until it calls StopSession or {name} clicks Done testing "
+                       f"(only {name}'s threads wait: other people's PCs are not affected).")
         return out
 
     def with_midturn(self, lane, output):
@@ -1622,9 +1700,13 @@ class Room:
         with self.tool_lock:
             tools = sorted((dict(t) for t in self.tools.values() if t["lane"] != lane and t.get("ok") is True
                             and t["ts"] + (t.get("secs") or 0) > since), key=lambda t: t["ts"])
-        out = []
+        out, me = [], owner(lane)
         for t in tools:
             what = self.change_text(t)
+            if what and owner(t["lane"]) != me:   # another person's editor and playtests are on their own PC
+                if not what.startswith("wrote "):
+                    continue
+                what += f" (on {owner(t['lane'])}'s PC)"
             line = f"{self.lane_label(t['lane'])} {what}" if what else ""
             if line and line not in out:
                 out.append(line)
@@ -1869,6 +1951,8 @@ class Room:
             return True, f"that card is already pinned to {self.lane_label(lane)}"
         pin = {"id": "tp" + secrets.token_hex(3), "kind": kind, "by": who, "ts": time.time(), **fields}
         self.set_lane_meta(lane, pins=(pins + [pin])[-12:])
+        if kind == "card":
+            self.goal_from_card(lane)
         self.broadcast({"t": "lane_meta", "meta": self.lane_meta_all()})
         return True, f"pinned {self.pin_text(pin)} to {self.lane_label(lane)} (pin id {pin['id']})"
 
@@ -2102,7 +2186,7 @@ class Room:
         files = self.files_in_use(lane)
         return ("Threads (this one is " + self.lane_label(lane) + "):\n" + "\n".join("- " + r for r in rows)
                 + ("\nFiles the running threads are changing: " + ", ".join(files) if files else "")
-                + "".join("\n" + x.replace("[room] ", "") for x in self.lease_lines()))
+                + "".join("\n" + x.replace("[room] ", "") for x in self.lease_lines(lane)))
 
     def rules_view(self, name):
         with self.notes_lock:
@@ -2418,20 +2502,19 @@ class Room:
                 for p in people:
                     self.notify(p, "reminder", f"⏰ {r['text']}", f"from {r['by']}")
 
-    def mark_done(self, lane, texts):
-        # Claude ticks ✅ on the request it just finished (only adds, never takes a tick away)
-        mid = next((e["id"] for e in reversed(self.history) if e.get("t") == "msg" and e.get("id")
-                    and (e.get("lane") or e.get("from")) == lane and e.get("text") in texts), None)
+    def mark_done(self, lane, texts, aid=None, who="Claude"):
+        # the AI ticks ✅ on its own final answer for the task (only adds, never takes a tick away)
+        mid = aid if aid and any(e.get("id") == aid for e in list(self.history)[-50:]) else None
         if not mid:
             return
         with self.notes_lock:
             names = self.reactions.setdefault(mid, {}).setdefault("✅", [])
-            if "Claude" in names:
+            if who in names:
                 return
-            names.append("Claude")
+            names.append(who)
             save_json_safely(REACTIONS, self.reactions)
             now = dict(self.reactions[mid])
-        self.broadcast({"t": "react", "id": mid, "r": now, "by": "Claude", "e": "✅", "added": True})
+        self.broadcast({"t": "react", "id": mid, "r": now, "by": who, "e": "✅", "added": True})
 
     def reactions_view(self):
         with self.notes_lock:
@@ -2648,8 +2731,13 @@ class Room:
                          "default_model": CODEX_DEFAULT_MODEL if mid == "codex" else ""})
         return rows
 
-    def set_pref(self, name, model=None, effort=None):
+    def set_pref(self, name, model=None, effort=None, mute_approval=None):
         p = self.cfg.setdefault("prefs", {}).setdefault(name, {})
+        if mute_approval is not None and model is None and effort is None:   # just the sound: no "assistant is now" line
+            p["mute_approval_sound"] = bool(mute_approval)
+            save_json(CONFIG, self.cfg)
+            self.send_to(name, {"t": "settings", **self.settings_view(name)})
+            return
         if model is not None and model in MODELS.values():
             p["model"] = model
         allowed = self.efforts_for(self.pref(name)[0]) + ("", "auto")
@@ -2659,8 +2747,31 @@ class Room:
             p["effort"] = ""
         save_json(CONFIG, self.cfg)
         m, e = self.pref(name)
-        self.send_to(name, {"t": "settings", "model": m, "model_label": model_label(m), "effort": e})
+        self.send_to(name, {"t": "settings", **self.settings_view(name)})
         self.broadcast({"t": "sys", "text": f"{name}'s assistant is now {model_label(m)}" + (f" · {e} effort" if e else "")})
+
+    def settings_view(self, name):
+        m, e = self.pref(name)
+        return {"model": m, "model_label": model_label(m), "effort": e,
+                "mute_approval_sound": bool(self.cfg.get("prefs", {}).get(name, {}).get("mute_approval_sound"))}
+
+    def pchat_clear(self, name):
+        """The host wipes the people chat; the old messages stay in a backup file on the host."""
+        if name != self.cfg["host"]:
+            return False, "only the host can clear the people chat"
+        stamp = time.strftime("%Y%m%d-%H%M%S")
+        try:
+            if os.path.exists(PEOPLE_LOG):
+                shutil.copyfile(PEOPLE_LOG, os.path.join(ROOT, f"people.backup-{stamp}.jsonl"))
+            open(PEOPLE_LOG, "w", encoding="utf-8").close()
+        except OSError as e:
+            return False, f"couldn't clear it: {e}"
+        with self.lock:
+            n = len(self.pchat)
+            self.pchat = []
+        self.broadcast({"t": "pchat_clear", "by": name})
+        self.broadcast({"t": "sys", "text": f"🧹 {name} cleared the people chat ({n} messages; a backup is kept on the host)"}, keep=True)
+        return True, "cleared"
 
     def pc_names(self):
         with self.lock:
@@ -2682,7 +2793,7 @@ class Room:
                "mode": "your PC shared" if agent_info else "no PC shared", "busy": list(busy), "busy_secs": busy,
                "model": model_label(self.cfg.get("model")), "chat_version": latest, "web_version": web_version(),
                "notes": {str(v): RELEASE_NOTES[v] for v in sorted(RELEASE_NOTES)[-4:]}, "locks": self.locks_view(),
-               "settings": {"model": self.pref(name)[0], "model_label": model_label(self.pref(name)[0]), "effort": self.pref(name)[1]},
+               "settings": self.settings_view(name),
                "models": self.models_info(), "efforts": list(EFFORTS), "threads": self.threads_view(), "usage": self.usage_view(),
                "room_version": ROOM_VERSION, "lane_meta": self.lane_meta_all(), "reacts": list(REACTS),
                "undos": self.undos_view(), "activity": self.activity_view(), "stars": self.stars_of(name),
@@ -2733,6 +2844,8 @@ class Room:
             self.conn_info[q] = {"kind": kind, "version": version, "agent": agent_info}
             if agent_info:
                 self.agents[name] = {"q": q, "info": agent_info}
+        if agent_info:
+            self.redeliver_execs(name)
         self.broadcast({"t": "presence", "online": self.online(), "pcs": self.pc_names(), "versions": self.terminal_versions()})
         return q
 
@@ -2748,6 +2861,7 @@ class Room:
                     if other_name == name and info:
                         self.agents[name] = {"q": other_q, "info": info}
                         break
+        self.redeliver_execs(name)   # an approval this window had goes to the one still (or newly) open
         with open(CONNECT_LOG, "a", encoding="utf-8") as f:
             f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} disconnect {name}\n")
         self.mark_seen(name, save=True)
@@ -2802,9 +2916,13 @@ class Room:
         for lim in limits:
             level = max([w for w in USAGE_WARN if lim["percent"] >= w], default=0)
             sent, window = self.usage_warned.get(lim["kind"], (0, None))
-            if window != lim["resets"]:   # a new window: start over
+            try:   # to the minute: the API's reset time jitters by microseconds on every poll
+                resets = round(float(lim.get("resets") or 0) / 60)
+            except (TypeError, ValueError):
+                resets = lim.get("resets")
+            if window != resets:   # a new window: start over
                 sent = 0
-            self.usage_warned[lim["kind"]] = (max(sent, level), lim["resets"])
+            self.usage_warned[lim["kind"]] = (max(sent, level), resets)
             if level > sent:
                 for person in self.cfg["people"]:
                     self.notify(person, "usage", f"Claude usage: {lim['label'][:1].lower() + lim['label'][1:]} at {lim['percent']}%",
@@ -2933,7 +3051,7 @@ class Room:
                                             for a in attached) + ")") if attached else ""
         self.mark_seen(name)
         if "/" in lane and text and not self.lane_meta(lane).get("goal"):   # a thread's first message is its goal until someone edits it
-            self.set_lane_meta(lane, goal=clip(text, 400))
+            self.set_lane_meta(lane, goal=clip(text, 400), goal_auto=True)
             self.broadcast({"t": "lane_meta", "meta": self.lane_meta_all()})
         joined = self.inject(lane, f"[{name}] (added while you work): {said}{refs}", raw=said + refs)
         self.broadcast({"t": "msg", "from": name, "text": text, "ts": time.time(), "lane": lane, **({"joined": True} if joined else {}),
@@ -2969,6 +3087,24 @@ class Room:
                 self.state = {"session_id": None, "lanes": {}, "base_ts": time.time(), "threads": self.state.get("threads", {})}
                 save_json(STATE, self.state)
             self.broadcast({"t": "sys", "text": f"{name} started a fresh conversation"}, keep=True)
+        elif cmd == "/operator":   # this thread is answered by the host's own Claude Code ("/operator off": the room's AI again)
+            target = lane or name
+            off = len(text.split()) > 1 and text.split()[1].lower() in ("off", "no", "0")
+            self.set_lane_meta(target, engine=None if off else "operator")
+            self.broadcast({"t": "lane_meta", "meta": self.lane_meta_all()})
+            self.broadcast({"t": "sys", "text": (f"{self.lane_label(target)} is back to the room's AI" if off else
+                            f"🛠 {self.lane_label(target)} is now a control thread: the host's Claude Code answers here (/operator off undoes it)")},
+                           keep=True)
+        elif cmd == "/unsend":   # take back your last message in this thread (Claude drops it too)
+            target = lane or name
+            with self.history_lock:
+                mine = next((e for e in reversed(self.history) if e.get("t") == "msg" and e.get("from") == name
+                             and (e.get("lane") or e.get("from")) == target), None)
+            if not mine or time.time() - mine.get("ts", 0) > 900:
+                self.send_to(name, {"t": "sys", "text": "nothing of yours to take back in this thread (the last 15 minutes)"})
+            else:
+                ok, msg = self.delete_msg(name, mine["id"])
+                self.send_to(name, {"t": "sys", "text": f"↩ took back “{clip(mine.get('text') or '', 80)}”" if ok else msg})
         elif cmd == "/stop":
             # "/stop" = this thread's task, "/stop sam" = all of sam's, "/stop all" = every task
             words = text.split()
@@ -3210,7 +3346,7 @@ class Room:
                 self.record({"t": "answer", "parts": parts, "lane": lane, "asked": asked, "id": aid, "secs": round(time.time() - t0),
                              "stopped": lane in self.halted, "assistant": "Codex" if is_codex else "Claude"})
                 if lane not in self.halted:
-                    self.mark_done(lane, asked)
+                    self.mark_done(lane, asked, aid, "Codex" if is_codex else "Claude")
                     self.report_to_parent(lane, parts)
         finally:
             self.usage_kick.set()
@@ -3324,7 +3460,7 @@ class Room:
         if files:
             lines.append("[room] files the other threads are changing right now (leave them alone; say so if you need one): "
                          + ", ".join(files))
-        lines += self.lease_lines()
+        lines += self.lease_lines(lane)
         zl = [self.zone_line(z) for z in self.zones_view()]
         if zl and "\n".join(zl) != self.zones_seen.get(lane):   # only when they changed
             self.zones_seen[lane] = "\n".join(zl)
@@ -4831,10 +4967,12 @@ class Room:
                            "Looking around (reads) needs no card.")
         exec_id = secrets.token_hex(6)
         approval = self.cfg["approval_seconds"]
-        entry = {"user": user, "lane": lane, "started": threading.Event(), "done": threading.Event(), "result": None}
+        msg = {"t": "exec", "id": exec_id, "tool": tool, "args": args, "asked_by": askers,
+               "timeout": approval, "lane": lane, "thread": self.thread_name(lane), "by_owner": by_owner}
+        entry = {"user": user, "lane": lane, "started": threading.Event(), "done": threading.Event(), "result": None,
+                 "msg": msg, "q": agent["q"], "until": time.time() + approval}   # q / msg: to ask again if that terminal goes
         self.execs[exec_id] = entry
-        agent["q"].put({"t": "exec", "id": exec_id, "tool": tool, "args": args, "asked_by": askers,
-                        "timeout": approval, "lane": lane, "thread": self.thread_name(lane), "by_owner": by_owner})
+        agent["q"].put(msg)
         with self.lock:
             auto = (self.activity.get(user, {}).get("pc") or {}).get("auto")   # None: their chat.py doesn't say
         grace = 0 if by_owner else 8 if auto and askers == [user] else 2.5 if auto is None else 0
@@ -4893,8 +5031,40 @@ class Room:
             entry["started"].set()
             entry["done"].set()
 
+    # ---- control threads: answered by the host's own Claude Code session (operator/inbox -> operator/outbox) ----
+    def ask_operator(self, lane, prompt):
+        aid = self.current_aid.get(lane) or ("a" + secrets.token_hex(4))
+        with self.lock:
+            texts = list((self.busy.get(lane) or {}).get("texts") or [])
+        job = {"id": aid, "lane": lane, "person": owner(lane), "thread": self.thread_name(lane) or "Main",
+               "texts": texts, "ts": time.time(), "context": clip(prompt, 6000)}
+        inbox, outbox = os.path.join(OPERATOR_DIR, "inbox"), os.path.join(OPERATOR_DIR, "outbox")
+        os.makedirs(inbox, exist_ok=True)
+        os.makedirs(outbox, exist_ok=True)
+        with open(os.path.join(inbox, aid + ".json"), "w", encoding="utf-8") as f:
+            json.dump(job, f, ensure_ascii=False, indent=1)
+        self.broadcast({"t": "status", "text": "waiting for the host's Claude Code", "lane": lane})
+        reply_path, deadline = os.path.join(outbox, aid + ".json"), time.time() + 45 * 60
+        while time.time() < deadline:
+            if lane in self.halted:
+                return [["text", "(stopped before the host's Claude Code answered)"]]
+            if os.path.exists(reply_path):
+                try:
+                    with open(reply_path, encoding="utf-8") as f:
+                        text = str(json.load(f).get("text") or "").strip()
+                except (OSError, ValueError):
+                    time.sleep(1)
+                    continue
+                if text:
+                    self.broadcast({"t": "delta", "text": text, "lane": lane})
+                    return [["text", text]]
+            time.sleep(1)
+        return [["text", "The host's Claude Code didn't answer within 45 minutes; ask again, or switch back with /operator off."]]
+
     def ask_claude(self, lane, prompt):
         # a fresh secret per turn tells the server whose turn a PC action comes from
+        if self.lane_meta(lane).get("engine") == "operator":   # a control thread: the host's Claude Code answers
+            return self.ask_operator(lane, prompt), False
         token = secrets.token_urlsafe(24)
         with self.lock:
             self.exec_tokens[token] = lane
@@ -5883,7 +6053,7 @@ def make_handler(room):
             elif path == "/board":
                 room.board_op(name, body)
             elif path == "/settings":   # the model / effort picker
-                room.set_pref(name, model=body.get("model"), effort=body.get("effort"))
+                room.set_pref(name, model=body.get("model"), effort=body.get("effort"), mute_approval=body.get("mute_approval_sound"))
             elif path == "/locks":
                 room.report_locks(name, body)
             elif path == "/lock_request":
@@ -5910,6 +6080,10 @@ def make_handler(room):
                 lane = room.lane_of(name, body.get("thread"))
                 ok, msg = (room.thread_unpin(name, lane, str(body.get("id", ""))) if body.get("op") == "remove"
                            else room.thread_pin(name, lane, body))
+                if not ok:
+                    room.send_to(name, {"t": "sys", "text": msg})
+            elif path == "/pchat_clear":   # 🧹 in the people chat (host only)
+                ok, msg = room.pchat_clear(name)
                 if not ok:
                     room.send_to(name, {"t": "sys", "text": msg})
             elif path == "/pmsg":
@@ -6019,6 +6193,7 @@ def main():
     room = Room(cfg)
     threading.Thread(target=room.worker, daemon=True).start()
     threading.Thread(target=room.archiver, daemon=True).start()
+    threading.Thread(target=room.refresh_goals, daemon=True).start()
     threading.Thread(target=room.watch_files, daemon=True).start()
     threading.Thread(target=room.watch_usage, daemon=True).start()
     threading.Thread(target=room.measure_contexts, daemon=True).start()

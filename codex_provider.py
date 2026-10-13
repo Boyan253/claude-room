@@ -4,6 +4,8 @@ import secrets
 import threading
 import time
 import urllib.request
+import urllib.error
+import http.client
 from collections import deque
 import glob
 import os
@@ -142,21 +144,133 @@ def conversation_read(room, lane, args):
         'next_before': selected[0]['ts'] if selected and more else None}, ensure_ascii=False)), None
 
 
+RETRY_SECONDS = 120
+RETRY_DELAY = 0.5
+REQUEST_TIMEOUT = 10
+
+
+class InterruptedStream(OSError):
+    pass
+
+
 class RemoteTurn:
     def __init__(self, url, key, job):
         self.url, self.key, self.job = url, key, job
         self.finished = False
+        self.instance = None
+        self.cancelled = threading.Event()
+        self.ready = threading.Event()
+        self.cancel_lock = threading.Lock()
+        self.cancel_started = False
 
     def poll(self):
         return 0 if self.finished else None
 
     def cancel(self):
+        self.cancelled.set()
+        with self.cancel_lock:
+            if self.cancel_started:
+                return
+            self.cancel_started = True
+
         def send():
-            try:
-                request(self.url + '/cancel', self.key, {'job': self.job}, timeout=5).close()
-            except Exception:
-                pass
+            deadline = time.monotonic() + RETRY_SECONDS
+            # A stop can race the health check or the first submission.
+            while not self.ready.wait(0.2):
+                if self.finished or time.monotonic() >= deadline:
+                    return
+            if self.instance is None:
+                return
+            while time.monotonic() < deadline:
+                try:
+                    with request(self.url + '/cancel', self.key,
+                                 {'job': self.job, 'instance': self.instance}, timeout=5):
+                        return
+                except urllib.error.HTTPError as exc:
+                    exc.close()
+                    if exc.code not in (502, 504):
+                        return
+                except (OSError, http.client.HTTPException):
+                    pass
+                time.sleep(min(2, RETRY_DELAY))
         threading.Thread(target=send, daemon=True).start()
+
+    def events(self, payload, halted=lambda: False, status=lambda text: None):
+        """Reconnect only to the exact original job and replay after the last event.
+
+        The bridge instance pins execution to one lifetime. A restart, expired
+        journal or changed payload fails explicitly instead of rerunning tools.
+        """
+        cursor = 0
+        outage = None
+        announced = False
+        while not self.cancelled.is_set() and not halted():
+            response = None
+            try:
+                if self.instance is None:
+                    with request(self.url + '/health', self.key, {}, timeout=REQUEST_TIMEOUT) as health:
+                        info = json.load(health)
+                    if info.get('version') != 'resumable-2' or not info.get('instance'):
+                        raise RuntimeError('The Codex bridge needs the resumable transport update.')
+                    self.instance = info['instance']
+                    self.ready.set()
+                if self.cancelled.is_set() or halted():
+                    break
+                response = request(self.url + '/turn', self.key,
+                                   {**payload, 'instance': self.instance, 'after': cursor},
+                                   timeout=REQUEST_TIMEOUT)
+                for line in response:
+                    if self.cancelled.is_set() or halted():
+                        break
+                    if not line.endswith(b'\n'):
+                        raise InterruptedStream('Codex stream ended within an event')
+                    event = json.loads(line)
+                    if not isinstance(event, dict):
+                        raise RuntimeError('Invalid Codex stream event')
+                    seq = event.get('seq')
+                    if seq is None and event.get('type') == 'heartbeat':
+                        outage, announced = None, False
+                        continue
+                    if type(seq) is not int or seq < 1:
+                        raise RuntimeError('Codex stream event has no replay sequence')
+                    if seq <= cursor:
+                        continue
+                    if seq != cursor + 1:
+                        raise RuntimeError('Codex event replay has a gap; turn stopped safely.')
+                    outage, announced = None, False
+                    yield event
+                    cursor = seq
+                    if event.get('type') in ('done', 'error', 'cancelled'):
+                        return
+                if self.cancelled.is_set() or halted():
+                    break
+                # A clean TCP EOF is not proof that the assistant completed.
+                raise InterruptedStream('Codex stream ended before the turn completed')
+            except urllib.error.HTTPError as exc:
+                try:
+                    if exc.code not in (502, 504):
+                        try:
+                            detail = json.loads(exc.read(2048)).get('error', '')
+                        except (ValueError, OSError):
+                            detail = ''
+                        raise RuntimeError(detail or 'Codex bridge returned HTTP %s' % exc.code) from exc
+                finally:
+                    exc.close()
+            except (OSError, http.client.HTTPException):
+                pass
+            finally:
+                if response is not None:
+                    response.close()
+            if outage is None:
+                outage = time.monotonic()
+            if time.monotonic() - outage >= RETRY_SECONDS:
+                raise RuntimeError('The Codex connection did not recover within two minutes. '
+                                   'The existing turn was not restarted.')
+            if not announced:
+                status('Codex connection interrupted; reconnecting to the same turn')
+                announced = True
+            self.cancelled.wait(RETRY_DELAY)
+        self.cancel()
 
 
 def request(url, key, data, timeout=30):
@@ -198,14 +312,12 @@ def ask_codex(room, lane, prompt, token):
                'context': context[-8:], 'model': model, 'effort': effort, 'exec_token': token,
                'rules': room.codex_rules(), 'claude_handover': handover}
     turn_tools = []
-    response = None
     try:
-        response = request(url + '/turn', key, payload, timeout=30)
-        for line in response:
+        for event in proc.events(payload, halted=lambda: lane in room.halted,
+                                 status=lambda text: room.broadcast({'t': 'status', 'text': text, 'lane': lane})):
             if lane in room.halted:
                 proc.cancel()
                 break
-            event = json.loads(line)
             kind = event.get('type')
             if kind == 'session':
                 with room.state_lock:
@@ -239,6 +351,13 @@ def ask_codex(room, lane, prompt, token):
                             part[4:7] = [done['ok'], done['secs'], preview]
                     room.broadcast({'t': 'tool_done', 'tid': tid, 'ok': done['ok'], 'secs': done['secs'],
                                     'preview': preview, 'lines': lines, 'lane': lane})
+            elif kind in ('queued', 'running'):
+                room.broadcast({'t': 'status', 'lane': lane,
+                                'text': 'Codex is waiting for a free slot' if kind == 'queued' else 'Codex is working'})
+            elif kind == 'cancelled':
+                if lane not in room.halted:
+                    raise RuntimeError('The Codex turn was cancelled on the bridge.')
+                break
             elif kind == 'error':
                 raise RuntimeError(event.get('message', 'Codex failed'))
             elif kind == 'done':
@@ -256,9 +375,8 @@ def ask_codex(room, lane, prompt, token):
             room.broadcast({'t': 'delta', 'text': text, 'lane': lane})
         proc.cancel()
     finally:
-        if response:
-            response.close()
         proc.finished = True
+        proc.ready.set()
         room.stopping.discard(lane)
         for tid in turn_tools:
             room.tool_finish(tid, None, None)

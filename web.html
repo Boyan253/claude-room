@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="room-version" content="54">
 <title>Claude Room</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23f3a07a%22/%3E%3Cstop%20offset%3D%22.55%22%20stop-color%3D%22%23e07a4c%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23c75f34%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20transform%3D%22translate%284%204%29%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%2020.5V10a6%206%200%200%201%2012%200v10.5M3.5%2020.5h17%22/%3E%3Cpath%20d%3D%22M12%209.2l.95%202.35%202.35.95-2.35.95L12%2015.8l-.95-2.35-2.35-.95%202.35-.95z%22%20fill%3D%22%23fff%22%20stroke-width%3D%221%22/%3E%3C/g%3E%3C/svg%3E">
 <script>try { const s = JSON.parse(localStorage.getItem("room-settings") || "{}"); if (s.theme) document.documentElement.dataset.theme = s.theme; if (s.accent) document.documentElement.dataset.accent = s.accent; } catch {}</script>
@@ -1460,6 +1461,139 @@
   @media (max-width: 760px) { .wb-hint, .bhead .hint, #modelChip, .bsearch, #usageBtn .ubar, #usageBtn .ul { display:none; } .pill .txt { display:none; }
     #usageBtn { gap:6px; padding:4px 9px; } #usageBtn .us { min-width:0; }
     .tab { padding:6px 10px; } .tab span:not(.badge):not(.dot) { display:none; } #top .brand small { display:none; } }
+
+  /* =================================================================== ▦ Threads view (v51): one calm card per thread */
+  #threads { display:none; flex:1; min-width:0; flex-direction:column; overflow-y:auto; overflow-anchor:none; }
+  body.view-threads #threads { display:flex; }
+  .tvTop { display:flex; align-items:center; gap:8px 12px; flex-wrap:wrap; width:100%; max-width:960px; margin:0 auto; padding:16px 24px 8px; box-sizing:border-box; }
+  .tvIcon { width:32px; height:32px; border-radius:10px; display:grid; place-items:center; flex:none; background:var(--surface-3); color:var(--text-2); box-shadow:var(--sh-1); }
+  .tvIcon svg { width:16px; height:16px; }
+  .tvTop h2 { margin:0; font-size:17px; font-weight:700; letter-spacing:-.015em; line-height:1.2; }
+  .tvTop small { display:block; color:var(--text-3); font-size:12px; font-weight:500; }
+  .tvGrow { flex:1; }
+  .tvSeg { display:inline-flex; gap:2px; padding:2px; border-radius:9px; background:var(--surface); border:1px solid var(--border); }
+  .tvSeg button { all:unset; cursor:pointer; padding:4px 10px; border-radius:7px; font-size:12px; font-weight:550; color:var(--text-3); transition:color .15s, background .15s; }
+  .tvSeg button:hover { color:var(--text); }
+  .tvSeg button.on { color:var(--text); background:var(--surface-3); box-shadow:var(--sh-1); }
+  .tvSeg button:focus-visible { box-shadow:0 0 0 2px var(--border-3); }
+  .tvList { display:grid; grid-template-columns:minmax(0, 1fr); gap:16px; align-items:start; width:100%; max-width:960px; margin:0 auto; padding:8px 24px 16px; box-sizing:border-box; }
+  .tvList:empty { display:none; }
+  .tvCol { display:flex; flex-direction:column; gap:16px; min-width:0; }
+  .tvEmpty { grid-column:1 / -1; color:var(--text-3); text-align:center; padding:32px 16px; font-size:13px; }
+  .tvFam { min-width:0; display:flex; flex-direction:column; }
+  .tvRow { --tvh:220px; --tvl:4; --tvt:40px; position:relative; display:flex; flex-direction:column; height:var(--tvh); min-width:0;
+           padding:12px 16px; border-radius:12px; background:var(--surface); border:1px solid var(--border); border-left:3px solid var(--tvp, var(--text-3));
+           box-shadow:var(--sh-1); cursor:pointer; outline:none; transition:opacity .2s, border-color .2s, box-shadow .2s; }
+  #threads.tvDense .tvRow { --tvh:180px; --tvl:2; }
+  .tvRow.idle:not(.unseen) { opacity:.75; }
+  .tvRow:hover, .tvRow:focus-visible, .tvRow:focus-within, .tvRow.exp, .tvRow.cur { opacity:1 !important; }
+  .tvRow:hover { border-top-color:var(--border-2); border-right-color:var(--border-2); border-bottom-color:var(--border-2); }
+  .tvRow.cur { box-shadow:var(--sh-1), 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent); }
+  .tvRow:focus-visible { box-shadow:0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .tvRow.exp { height:auto; min-height:var(--tvh); cursor:default; }
+  .tvRow.arch.idle { opacity:.55; }
+  .tvHead { display:flex; align-items:center; gap:8px; height:24px; min-width:0; flex:none; cursor:pointer; }
+  .tvDot { flex:none; width:8px; height:8px; border-radius:50%; background:var(--text-3); opacity:.55; }
+  .tvRow.work .tvDot { background:var(--accent); opacity:1; animation:tvPulse 1.6s ease-in-out infinite; }
+  @keyframes tvPulse { 0%, 100% { box-shadow:0 0 0 0 color-mix(in srgb, var(--accent) 55%, transparent); } 60% { box-shadow:0 0 0 5px color-mix(in srgb, var(--accent) 0%, transparent); } }
+  @media (prefers-reduced-motion: reduce) { .tvRow.work .tvDot { animation:none; } }
+  .tvName { flex:0 1 auto; min-width:56px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:14px; font-weight:600; color:var(--text); letter-spacing:-.005em; }
+  .tvOwn { color:var(--text-3); font-weight:500; }
+  .tvCardC, .tvGoal { all:unset; flex:0 4 auto; min-width:0; max-width:55%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+                      font-size:12px; line-height:20px; color:var(--text-3); }
+  .tvCardC { cursor:pointer; padding:0 8px; border-radius:6px; background:var(--surface-2); box-shadow:inset 0 0 0 1px var(--border); }
+  .tvCardC:hover { color:var(--text-2); }
+  .tvWhen { margin-left:auto; flex:none; padding-left:8px; font-size:12px; color:var(--text-3); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .tvRow.work .tvWhen { color:var(--accent); }
+  .tvRow.unseen .tvWhen { color:var(--text); font-weight:600; }
+  .tvBtn { all:unset; cursor:pointer; flex:none; display:inline-flex; align-items:center; height:24px; padding:0 8px; border-radius:7px;
+           font-size:12px; font-weight:550; color:var(--text-3); transition:color .15s, background .15s; }
+  .tvBtn:hover, .tvBtn:focus-visible { color:var(--text); background:var(--surface-3); }
+  .tvChev { padding:0 4px; }
+  .tvChev svg { width:14px; height:14px; transition:transform .2s var(--ease); }
+  .tvRow.exp .tvChev svg { transform:rotate(180deg); }
+  .tvBody { flex:1; min-height:0; display:flex; flex-direction:column; gap:4px; margin-top:8px; overflow:hidden; }
+  .tvAsk { flex:none; font-size:12.5px; line-height:20px; color:var(--text-3); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .tvAsk b { font-weight:600; color:var(--text-2); margin-right:6px; }
+  .tvAns { flex:0 1 auto; min-height:0; max-height:calc(var(--tvl) * 20px); overflow:hidden; font-size:13.5px; line-height:20px; color:var(--text-2); word-break:break-word; }
+  .tvAns.tvFade { -webkit-mask-image:linear-gradient(180deg, #000 calc(100% - 22px), transparent); mask-image:linear-gradient(180deg, #000 calc(100% - 22px), transparent); }
+  .tvMuted { color:var(--text-3); }
+  .tvAns code, .tvText code { font:12px var(--mono); background:var(--surface-3); border-radius:5px; padding:0 4px; }
+  .tvAns b, .tvText b { font-weight:650; color:var(--text); }
+  .tvText { white-space:pre-wrap; }
+  .tvText pre { font:12px/1.55 var(--mono); background:var(--bg-2); border:1px solid var(--border); border-radius:8px; padding:8px 12px; margin:4px 0; overflow-x:auto; white-space:pre; }
+  .tvText pre code { background:none; padding:0; }
+  .tvText a, .tvAns a { color:var(--accent-2); text-decoration:none; }
+  .tvFoot { flex:none; display:flex; align-items:center; gap:8px; height:calc(var(--tvt) + 9px); margin-top:8px; padding-top:8px; border-top:1px solid var(--border); min-width:0; }
+  .tvPins { flex:1; min-width:0; display:flex; align-items:center; gap:8px; overflow:hidden; }
+  .tvPins > [hidden] { display:none !important; }
+  .tvThumb { all:unset; cursor:zoom-in; flex:none; width:var(--tvt); height:var(--tvt); border-radius:8px; overflow:hidden; background:var(--surface-3); box-shadow:inset 0 0 0 1px var(--border); }
+  .tvThumb img { width:100%; height:100%; object-fit:cover; display:block; }
+  .tvThumb:hover, .tvThumb:focus-visible { box-shadow:0 0 0 2px var(--border-3); }
+  .tvChip { all:unset; cursor:pointer; flex:none; display:inline-block; max-width:160px; height:24px; line-height:24px; padding:0 8px; border-radius:7px;
+            background:var(--surface-2); box-shadow:inset 0 0 0 1px var(--border); color:var(--text-2); font-size:12px; font-weight:550;
+            white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-decoration:none; }
+  .tvChip:hover, .tvChip:focus-visible { color:var(--text); box-shadow:inset 0 0 0 1px var(--border-2); }
+  .tvNote { cursor:default; font-weight:450; color:var(--text-3); max-width:180px; }
+  .tvMore { all:unset; cursor:pointer; flex:none; height:24px; line-height:24px; padding:0 8px; border-radius:7px; font-size:12px; font-weight:600; color:var(--text-3); }
+  .tvMore:hover, .tvMore:focus-visible { color:var(--text); background:var(--surface-3); }
+  .tvStepsBtn { all:unset; cursor:pointer; flex:none; margin-left:auto; max-width:45%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+                height:24px; line-height:24px; padding:0 8px; border-radius:7px; font-size:12px; color:var(--text-3); }
+  .tvStepsBtn:hover, .tvStepsBtn:focus-visible { color:var(--text); background:var(--surface-3); }
+  .tvRow.exp .tvBody { overflow:visible; gap:8px; }
+  .tvRow.exp .tvAns { max-height:none; overflow:visible; }
+  .tvRow.exp .tvFoot { height:auto; }
+  .tvRow.exp .tvPins { flex-wrap:wrap; overflow:visible; }
+  .tvAskFull { font-size:13px; line-height:20px; color:var(--text-3); padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .tvAskFull b { display:block; font-weight:600; color:var(--text-2); }
+  .tvSteps { all:unset; cursor:pointer; display:block; width:fit-content; margin:4px 0; padding:0 8px; height:22px; line-height:22px; border-radius:7px; font-size:12px; color:var(--text-3); }
+  .tvSteps:hover, .tvSteps.on { color:var(--text-2); background:var(--surface-2); }
+  .tvStepList { margin:0 0 8px 8px; padding-left:12px; border-left:1px solid var(--border-2); }
+  .tvStep { display:flex; align-items:center; gap:8px; min-width:0; font-size:12px; line-height:20px; color:var(--text-3); }
+  .tvStep i { flex:none; width:6px; height:6px; border-radius:50%; background:var(--text-3); opacity:.6; }
+  .tvStep.err i { background:var(--red); opacity:1; }
+  .tvStep.run i { background:var(--accent); opacity:1; }
+  .tvStep b { flex:none; font-weight:600; color:var(--text-2); }
+  .tvStep span { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font:11.5px var(--mono); }
+  .tvStep em { flex:none; font-style:normal; font-variant-numeric:tabular-nums; }
+  .tvSec { padding-top:8px; border-top:1px solid var(--border); font-size:12.5px; line-height:20px; color:var(--text-3); }
+  .tvSec > b { font-weight:600; color:var(--text-2); margin-right:8px; }
+  .tvPlan { list-style:none; margin:4px 0 0; padding:0; }
+  .tvPlan li.done { text-decoration:line-through; opacity:.7; }
+  .tvPlan li.doing { color:var(--text-2); }
+  .tvKids { display:flex; flex-direction:column; }
+  .tvKid { position:relative; margin-top:8px; padding-left:24px; min-width:0; }
+  .tvKid::before { content:""; position:absolute; left:10px; top:-8px; width:14px; height:33px; border-left:1px solid var(--border-2); border-bottom:1px solid var(--border-2); border-bottom-left-radius:8px; }
+  .tvKid:not(:last-child)::after { content:""; position:absolute; left:10px; top:0; bottom:-8px; border-left:1px solid var(--border-2); }
+  .tvArchBar { width:100%; max-width:960px; margin:0 auto; padding:0 24px 24px; box-sizing:border-box; }
+  .tvArchBar:empty { display:none; }
+  .tvArchBtn { all:unset; cursor:pointer; padding:4px 10px; border-radius:8px; font-size:12.5px; color:var(--text-3); }
+  .tvArchBtn:hover, .tvArchBtn:focus-visible { color:var(--text); background:var(--surface-2); }
+  #tvArch { padding-top:0; padding-bottom:32px; }
+  #threads.tvWide .tvList { grid-template-columns:repeat(2, minmax(0, 1fr)); max-width:1840px; }   /* 2 balanced columns above 1600 px */
+  #threads.tvWide .tvTop, #threads.tvWide .tvArchBar { max-width:1840px; }
+  @media (max-width: 600px) {
+    .tvTop { padding:16px 16px 8px; } .tvList { padding:8px 16px 16px; gap:12px; } .tvCol { gap:12px; } .tvArchBar { padding:0 16px 24px; }
+    .tvRow { padding:12px; } .tvSeg button { padding:4px 8px; } .tvCardC, .tvGoal { max-width:40%; } .tvKid { padding-left:16px; } .tvKid::before { left:6px; width:10px; } .tvKid:not(:last-child)::after { left:6px; }
+  }
+  #tvPop { position:fixed; z-index:128; display:none; width:min(340px, calc(100vw - 32px)); max-height:min(420px, 70vh); overflow:auto; padding:12px;
+           border-radius:12px; background:var(--surface-2); border:1px solid var(--border-2); box-shadow:var(--sh-3); }
+  #tvPop.on { display:block; }
+  .tvPopH { font-size:12px; font-weight:600; color:var(--text-3); margin-bottom:8px; }
+  .tvPopL { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+  #tvPop .tvThumb { --tvt:64px; width:64px; height:64px; }
+  #tvPop .tvChip { max-width:100%; }
+  #tvPop .tvNote { white-space:normal; height:auto; line-height:18px; padding:4px 8px; }
+  #tvPrev { position:fixed; z-index:150; left:-999px; top:-999px; pointer-events:none; padding:4px; border-radius:12px; background:var(--surface-2);
+            border:1px solid var(--border-2); box-shadow:var(--sh-3); opacity:0; transition:opacity .12s; }
+  #tvPrev.on { opacity:1; }
+  #tvPrev img { display:block; max-width:280px; max-height:220px; min-width:64px; min-height:48px; border-radius:8px; object-fit:contain; }
+  /* the compact composer row stays one line: a long thread name shrinks with an ellipsis (it now also holds ▦) */
+  #tbar:not(:has(.tmenu)) .tswitch { flex:0 1 auto; min-width:0; }
+  #tbar .tswitch > * { flex:none; }
+  #tbar .tswitch .tsname { flex:0 1 auto; min-width:24px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #tbar .tswitch .tcount { flex:0 50 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #tbar.tvTight .tswitch .tcount { display:none; }
 </style>
 </head>
 <body class="view-chat">
@@ -1467,6 +1601,7 @@
   <div class="brand"><i><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M6 20.5V10a6 6 0 0 1 12 0v10.5M3.5 20.5h17"/><path d="M12 9.2l.95 2.35 2.35.95-2.35.95L12 15.8l-.95-2.35-2.35-.95 2.35-.95z" fill="#fff" stroke-width="1"/></svg></i><div>Claude Room<span class="ver" id="roomVer" title="Version · Settings"></span><small id="roomPeople"></small></div></div>
   <nav id="tabs"><span id="tabInd"></span>
   <button class="tab on" data-view="chat"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg><span class="tl">Chat</span><span class="dot"></span></button>
+  <button class="tab" data-view="threads"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg><span class="tl">Threads</span><span class="badge" id="tvCount"></span></button>
   <button class="tab" data-view="tasks"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="13" rx="1.5"/><rect x="14" y="3" width="7" height="8" rx="1.5"/></svg><span class="tl">Tasks</span><span class="badge" id="taskCount"></span></button>
   <button class="tab" data-view="timeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5.5" r="2.5"/><circle cx="6" cy="18.5" r="2.5"/><path d="M6 8v8"/><path d="M11 5.5h9M11 12h6M11 18.5h9"/></svg><span class="tl">Timeline</span><span class="dot"></span></button>
   <button class="tab" data-view="meetings"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg><span class="tl">Meetings</span><span class="dot"></span></button>
@@ -1524,6 +1659,16 @@
   <div class="tline" id="tlList"></div>
 </section>
 
+<section id="threads">
+  <div class="tvTop"><span class="tvIcon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/></svg></span>
+    <div><h2>Threads</h2><small id="tvSub">Every conversation at a glance</small></div><span class="tvGrow"></span>
+    <div class="tvSeg" role="group" aria-label="Whose threads"><button data-tvwho="all" title="Everyone's threads">Everyone</button><button data-tvwho="me" title="Only your threads">Mine</button></div>
+    <div class="tvSeg" role="group" aria-label="Row size"><button data-tvdens="compact" title="Smaller rows: two lines of the answer">Compact</button><button data-tvdens="comfortable" title="Taller rows: four lines of the answer">Comfortable</button></div></div>
+  <div class="tvList" id="tvList"></div>
+  <div class="tvArchBar" id="tvArchBar"></div>
+  <div class="tvList" id="tvArch"></div>
+</section>
+
 <section id="meetings">
   <div class="mthead"><span class="bicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 10v3M6 6v11M10 3v18M14 8v7M18 5v13M22 10v3"/></svg></span>
     <div><h2>Meetings</h2><small id="mtSub">Recorded meetings: transcripts, summaries and audio</small></div><span class="spacer"></span>
@@ -1578,7 +1723,7 @@
   <input type="text" id="memeTop" placeholder="Top text" maxlength="80"><input type="text" id="memeBottom" placeholder="Bottom text" maxlength="80">
   <div id="memePics"></div>
   <div class="row"><span class="sys grow" style="font-size:12px">Pick a picture or paste one (Ctrl+V)</span><button class="btn" id="memeCancel">Cancel</button><button class="btn primary" id="memeSend">Send to 💬</button></div></div></div>
-<aside id="pplPanel"><div class="pphead"><b>💬 People</b><small>just the people · Claude doesn't read this</small><span class="grow"></span><button id="pplClose" title="Close">✕</button></div>
+<aside id="pplPanel"><div class="pphead"><b>💬 People</b><small>just the people · Claude doesn't read this</small><span class="grow"></span><button id="pplClear" title="Clear this chat for everyone (host only; a backup stays on the host)">🧹</button><button id="pplClose" title="Close">✕</button></div>
   <div id="pplLog"></div>
   <div id="gifPop"><input id="gifQ" placeholder="Search GIFs…"><div id="gifGrid"></div></div>
   <div class="ppbar"><button class="ppx" id="pplGif" title="GIFs">GIF</button><button class="ppx" id="pplMeme" title="Make a meme from a picture">😂</button><textarea id="pplIn" rows="1" placeholder="Message… (Enter sends, paste a picture)"></textarea><button id="pplSend" title="Send">↑</button></div></aside>
@@ -1667,6 +1812,7 @@ function setView(v) {
   if (v === "chat" || wide()) document.querySelector('.tab[data-view="chat"]').classList.remove("unread");
   if (v === "timeline") { document.querySelector('.tab[data-view="timeline"]').classList.remove("unread"); renderTimeline(); }
   if (v === "meetings") mtShow();
+  if (v === "threads") { tvSig = ""; tvRender(); }
   store.set("room-view", v);
   if (v === "draw") wbResize();
   if (v === "chat") input.focus();
@@ -1735,6 +1881,16 @@ function funWord(lane, since) {
   return FUN[(h + Math.floor((Date.now() - since) / 6000)) % FUN.length];
 }
 const busyNote = b => b.note && b.note !== "thinking" ? b.note : "";
+const ROOM_TIPS = [   // shown in the status line while at most one of your threads works
+  "Ctrl+K searches the whole chat", "/shot puts a picture of your screen in the chat", "★ saves a message · /saved lists them",
+  "/remind 18:00 playtest sets a reminder", "/effort auto: quick questions answer faster",
+  "Done testing frees the playtest for your other threads", "▶ Continue picks up after a Stop, even on another model (/continue opus)",
+  "/recap: a “Previously on…” of what happened while you were away", "📌 → Timeline adds any message to the project's story",
+  "a thread can open its own sub-threads for parts of a task", "/compact shrinks a long conversation now and saves usage",
+  "/poll and /vote run a quick poll", "■ Stop on a running answer stops Claude", "🎙 talk instead of typing",
+  "drag a meeting or one of its lines from 📝 Meetings into the chat", "▦ shows every thread with its card, status and last answer",
+  "/operator turns a thread into a control thread answered by the host's Claude Code"];
+const roomTip = () => "Tip: " + ROOM_TIPS[Math.floor(Date.now() / 20000) % ROOM_TIPS.length];
 // ---- threads: lanes are "alice" (main) or "alice/inventory-ui" ----
 let threads = [], curThread = "", threadOnly = false, tEditing = null, tbarSig = "", tbarAll = false, tmenuOpen = false, pinsOpen = false;
 try { curThread = localStorage.getItem("room-thread") || ""; threadOnly = localStorage.getItem("room-thread-only") === "1"; } catch { /* no storage */ }
@@ -1804,12 +1960,13 @@ function drawThreads() {
       : `<button class="tchip tnew" data-tnew title="Start another conversation with Claude that runs at the same time as your others">+ New thread</button>`;
     el.innerHTML = (tmenuOpen || tEditing ? `<div class="tmenu">${chip("", "Main") + mine.map(t => chip(t.id, t.name)).join("")}${newChip}</div>` : "")
       + `<button class="tchip on tswitch" data-tmenu title="Switch thread (all your threads)">${busy[here] ? `<i class="run"></i>` : `<span class="hash">#</span>`}`
-      + `${esc(curThread ? threadName(curThread) : "Main")}<span class="tcount">${mine.length + 1} threads</span>`
+      + `<span class="tsname">${esc(curThread ? threadName(curThread) : "Main")}</span><span class="tcount">${mine.length + 1} threads</span>`
       + `<svg class="chev${tmenuOpen ? " up" : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`
       + `${working ? `<small class="twk" title="${working} other thread(s) working">✻${working}</small>` : ""}${finished ? `<small class="tfn" title="${finished} finished: open the menu">✓${finished}</small>` : ""}</button>`
       + (pinsN ? `<button class="tchip tpinsb${pinsOpen ? " on" : ""}" data-tpins title="Pinned in this thread">📌 ${pinsN}</button>` : "")
       + `<span class="tspacer"></span>`
       + (mine.length ? `<button class="tchip ticon${threadOnly ? " on" : ""}" data-tonly title="${threadOnly ? "Showing only this thread: click for all" : "Show only this thread in the chat"}">${threadOnly ? "◉" : "○"}</button>` : "")
+      + `<button class="tchip ticon" data-tcards title="Every thread as a card (Threads view)">▦</button>`
       + `<button class="tchip ticon" data-tview title="Overview: what every thread is for and what it did">☰</button>`
       + (myStars.length ? `<button class="tchip ticon" data-tsaved title="Messages you saved">★${myStars.length}</button>` : "")
       + `<button class="tchip ticon" data-tbarfull title="Show all threads and pins in full rows">⤢</button>`;
@@ -1829,6 +1986,7 @@ function drawThreads() {
       ? `<span class="tchip on edit"><span class="hash">#</span><input id="tname" maxlength="40" placeholder="Name it, then Enter"></span>`
       : `<button class="tchip tnew" data-tnew title="Start another conversation with Claude that runs at the same time as your others">+ New thread</button>`)
     + (mine.length ? `<button class="tchip tfilter${threadOnly ? " on" : ""}" data-tonly title="Show only the selected thread in the chat">${threadOnly ? "◉ This thread only" : "○ All threads"}</button>` : "")
+    + `<button class="tchip tview" data-tcards title="Every thread as a card (Threads view)">▦ Cards</button>`
     + `<button class="tchip tview" data-tview title="What every thread is for and what it has done">☰ Overview</button>`
     + (myStars.length ? `<button class="tchip tview" data-tsaved title="Messages you saved">★ ${myStars.length}</button>` : "")
     + `<button class="tchip ticon" data-tbarcompact title="One compact row">⤡</button>`
@@ -1844,6 +2002,7 @@ document.addEventListener("click", e => {   // the thread menu closes when you c
   if (tmenuOpen && e.target.isConnected && !e.target.closest("#tbar")) { tmenuOpen = false; tbarSig = ""; drawThreads(); }
 });
 document.getElementById("tbar").addEventListener("click", e => {
+  if (e.target.closest("[data-tcards]")) { e.stopPropagation(); tmenuOpen = false; tbarSig = ""; drawThreads(); setView(view === "threads" ? "chat" : "threads"); return; }
   if (e.target.closest("[data-tmenu]")) { tmenuOpen = !tmenuOpen; tbarSig = ""; drawThreads(); return; }
   if (e.target.closest("[data-tpins]")) { pinsOpen = !pinsOpen; tbarSig = ""; drawThreads(); drawThreadPins(); return; }
   if (e.target.closest("[data-tbarfull]")) { setBarMode(false); return; }
@@ -2023,6 +2182,7 @@ function handle(ev) {
     case "rules": if (ev.room) aiRules.room = ev.room; if (ev.me !== undefined) aiRules.me = ev.me; drawAiPanel(); break;
     case "account": aiAccount = ev; drawAiPanel(true); break;
     case "pchat": pchat = ev.items || []; drawPchat(true); break;
+    case "pchat_clear": pchat = []; drawPchat(false); if (ev.by !== me) toast(`🧹 ${ev.by} cleared the people chat`); break;
     case "pmsg":
       pchat.push(ev); if (pchat.length > 300) pchat.shift(); drawPchat(ev.from === me);
       if (ev.from !== me && (!pplIsOpen() || document.hidden)) {
@@ -2151,7 +2311,8 @@ function handle(ev) {
         approvalHold.delete(ev.id);
         if (approvals.some(x => x.id === a.id)) return;
         approvals.push(a); renderApprove();
-        addNotif("approval", "Claude wants to do something on your PC", ev.summary, ["Review", () => setView("chat")], { toast: false, desktop: true });
+        addNotif("approval", "Claude wants to do something on your PC", ev.summary, ["Review", () => setView("chat")],
+                 { toast: false, desktop: !my.mute_approval_sound, silent: !!my.mute_approval_sound });
       }, 2500));
       break;
     }
@@ -2164,14 +2325,15 @@ function handle(ev) {
     case "timeline": timelineEvent(ev); break;
     case "meetings": mtEvent(ev); break;
   }
+  tvKick(ev);
   drawStatus();
 }
 
 function drawStatus() {
   if (!connected) { statusEl.textContent = "✗ disconnected, retrying…"; return; }
   const bits = [];
-  const lanes = Object.entries(busy).map(([n, b]) =>
-    `✻ ${funWord(n, b.since)}… ${laneLabel(n)} ${fmtDur((Date.now() - b.since) / 1000)}${busyNote(b) ? " · " + busyNote(b) : ""}`);
+  const lanes = Object.entries(busy).filter(([n]) => owner(n) === me).map(([n, b]) =>   // only your own threads
+    `✻ ${funWord(n, b.since)}… ${n === me ? "Main" : "# " + (threadName(n) || n)} ${fmtDur((Date.now() - b.since) / 1000)}${busyNote(b) ? " · " + busyNote(b) : ""}`);
   if (lanes.length) bits.push(lanes.join("   "));
   for (const [n, a] of Object.entries(answers)) {   // the waiting line inside each live answer
     const b = busy[n];
@@ -2182,6 +2344,7 @@ function drawStatus() {
   const typers = Object.keys(typing).filter(n => n !== me && Date.now() - typing[n] < 3000);
   if (typers.length) bits.push(typers.join(", ") + " typing…");
   if (!bits.length) bits.push(`${online.length} online · / for commands · Tab completes`);
+  if (lanes.length <= 1) bits.push(roomTip());
   statusEl.textContent = "─ " + bits.join(" · ");
   if (me) drawThreads();
   statusEl.classList.toggle("busy", lanes.length > 0);
@@ -2748,6 +2911,16 @@ function setPpl(open) {
 const pplIsOpen = () => document.documentElement.classList.contains("ppl-open");
 document.getElementById("pplBtn").onclick = e => { e.stopPropagation(); setPpl(!pplIsOpen()); };
 document.getElementById("pplClose").onclick = () => setPpl(false);
+document.getElementById("pplClear").onclick = e => {   // host only, two clicks
+  const b = e.currentTarget;
+  if (me !== hostName) { toast("Only the host can clear the people chat"); return; }
+  if (!b.classList.contains("arm")) { b.classList.add("arm"); b.textContent = "Clear all?"; setTimeout(() => { b.classList.remove("arm"); b.textContent = "🧹"; }, 3000); return; }
+  b.classList.remove("arm"); b.textContent = "🧹"; post("/pchat_clear");
+};
+document.getElementById("setPanel").addEventListener("click", e => {
+  const m = e.target.closest("[data-mute-appr]");
+  if (m) { post("/settings", { mute_approval_sound: m.dataset.muteAppr === "1" }); my.mute_approval_sound = m.dataset.muteAppr === "1"; drawSetPanel(); }
+});
 function pplSend() {
   const text = pplIn.value.trim();
   if (!text) return;
@@ -3121,7 +3294,7 @@ async function credits() {
     ["Special effects", "role"], [`${s.tool_calls ?? "?"} tool calls`, "name"],
     ["Running time", "role"], [`${hours} hours of Claude at work`, "name"],
     ["Story so far", "role"], [`${s.moments ?? 0} moments · ${s.fixed ?? 0} fixes · ${s.pictures ?? 0} pictures`, "name"],
-    ["Version", "role"], [`v${s.version ?? roomVersion}`, "name"],
+    ["Version", "role"], [`v${s.version ?? shownVersion()}`, "name"],
     ["No closets were safe during the making of this room.", "small"], ["THE END?", "big"]];
   const o = document.createElement("div");
   o.id = "credits";
@@ -3407,7 +3580,12 @@ function applySettings() {
 }
 function setSetting(k, v) { settings[k] = v; applySettings(); drawSetPanel(); }
 applySettings();
-function drawVersion() { document.getElementById("roomVer").textContent = roomVersion ? "v" + roomVersion : ""; }
+function drawVersion() {   // the page's own number counts too: page-only updates don't restart the server
+  const page = +((document.querySelector('meta[name="room-version"]') || {}).content || 0);
+  const v = Math.max(+roomVersion || 0, page);
+  document.getElementById("roomVer").textContent = v ? "v" + v : "";
+}
+const shownVersion = () => Math.max(+roomVersion || 0, +((document.querySelector('meta[name="room-version"]') || {}).content || 0)) || "";
 function drawSetPanel() {
   const p = document.getElementById("setPanel");
   if (!p.classList.contains("on")) return;
@@ -3421,6 +3599,7 @@ function drawSetPanel() {
       <div class="srow"><span>Chat text size</span>${seg("zoom", ZOOMS)}</div>
       <div class="sh">Sounds</div>
       <div class="srow"><span>Play a sound for</span>${seg("sound", [["off", "Nothing"], ["important", "Important"], ["all", "Everything"]])}</div>
+      <div class="srow"><span>Sound when Claude asks to act on your PC</span><div class="sseg"><button data-mute-appr="0" class="${my.mute_approval_sound ? "" : "on"}">On</button><button data-mute-appr="1" class="${my.mute_approval_sound ? "on" : ""}">Off</button></div></div>
       <div class="srow"><span>Volume</span><input type="range" min="0.1" max="1" step="0.1" value="${settings.volume}" data-range="volume"><button class="btn" data-test-sound>▶ Test</button></div>
       <div class="snote">Important: Claude answered you, approvals, mentions, a task for you, locks, usage warnings. Everything also plays for other people's messages, pins and files. Sounds play when the room is in the background or a notification pops up.</div>
       <div class="sh">Fun</div>
@@ -3432,7 +3611,7 @@ function drawSetPanel() {
       <div class="sh">Desktop notifications</div>
       <div class="srow"><span>${perm === "granted" ? "On (when the room is in the background)" : perm === "denied" ? "Blocked in this browser's site settings" : perm === "default" ? "Off" : "Not supported in this browser"}</span>${perm === "default" ? `<button class="btn" data-notif-on>Turn on</button>` : ""}</div>
     </div>
-    <div class="pfoot"><span>Claude Room ${roomVersion ? "v" + roomVersion : ""}${versions[me] ? ` · your terminal v${versions[me]}` : ""}</span><span class="grow"></span><span title="Page build">${esc(String(webVersion || "").slice(0, 8))}</span></div>`;
+    <div class="pfoot"><span>Claude Room ${shownVersion() ? "v" + shownVersion() : ""}${versions[me] ? ` · your terminal v${versions[me]}` : ""}</span><span class="grow"></span><span title="Page build">${esc(String(webVersion || "").slice(0, 8))}</span></div>`;
 }
 document.getElementById("setBtn").onclick = e => { e.stopPropagation(); togglePanel("setPanel", drawSetPanel); };
 document.getElementById("roomVer").onclick = e => { e.stopPropagation(); togglePanel("setPanel", drawSetPanel); };
@@ -3891,7 +4070,7 @@ function paletteItems(qs) {
     ["▦", "New board", "Tasks", () => { setView("tasks"); document.getElementById("addBoard").click(); }],
     ["💬", "Go to Chat", "", () => setView("chat")], ["🗂", "Go to Tasks", "", () => setView("tasks")],
     ["📎", "Go to Files", "", () => setView("files")], ["✏️", "Go to Whiteboard", "", () => setView("draw")],
-    ["⏱", "Go to Timeline", "", () => setView("timeline")], ["📝", "Go to Meetings", "", () => setView("meetings")], ["⏱", "New timeline moment", "Timeline", () => { setView("timeline"); openComposer(); }],
+    ["⏱", "Go to Timeline", "", () => setView("timeline")], ["📝", "Go to Meetings", "", () => setView("meetings")], ["▦", "Go to Threads", "", () => setView("threads")], ["⏱", "New timeline moment", "Timeline", () => { setView("timeline"); openComposer(); }],
     ["⌨", "Open my terminal", "", openTerminal], ["🔒", "Show Lore locks", "", () => togglePanel("lockPanel", drawLockPanel)], ["◔", "Show Claude usage", "", () => togglePanel("usagePanel", drawUsagePanel)],
     ["⚙", "Settings: theme, sounds, text size", "", () => togglePanel("setPanel", drawSetPanel)],
     ["🤖", "AI: rules for Claude, whose account runs my turns", "", () => document.getElementById("aiBtn").click()],
@@ -3952,7 +4131,7 @@ const notifKey = () => `room-notifs-${me}`;
 function loadNotifs() { try { notifs = JSON.parse(store.get(notifKey()) || "[]"); } catch { notifs = []; } drawBell(); }
 function saveNotifs() { store.set(notifKey(), JSON.stringify(notifs.slice(0, 60).map(n => ({ ...n, action: undefined })))); }
 const actions = {};   // id -> function (not saved)
-function addNotif(kind, title, body = "", action = null, { toast: showToast = true, desktop = false } = {}) {
+function addNotif(kind, title, body = "", action = null, { toast: showToast = true, desktop = false, silent = false } = {}) {
   if (replaying) return;
   const id = "n" + Math.random().toString(36).slice(2, 9);
   notifs.unshift({ id, kind, title, body: String(body || "").slice(0, 300), ts: Date.now(), read: false, label: action && action[0] });
@@ -3960,7 +4139,7 @@ function addNotif(kind, title, body = "", action = null, { toast: showToast = tr
   notifs = notifs.slice(0, 60); saveNotifs(); drawBell(true);
   if (showToast) toastCard(kind, title, body, action ? [action] : []);
   if (desktop) notify(title, body);
-  if (showToast || document.hidden || !document.hasFocus()) chimeFor(kind);
+  if (!silent && (showToast || document.hidden || !document.hasFocus())) chimeFor(kind);
   if (document.getElementById("notifPanel").classList.contains("on")) drawNotifPanel();
 }
 function drawBell(ring) {
@@ -5805,9 +5984,374 @@ mtEl("mtRecBox").addEventListener("click", e => {
 mtEl("mtRecBox").addEventListener("keydown", e => { if (e.key === "Enter" && e.target.id === "mtTitleIn") mtEl("mtRecBox").querySelector("[data-mtgo]").click(); });
 addEventListener("beforeunload", e => { if (mtRec) { e.preventDefault(); e.returnValue = ""; } });
 
+// =================================================================== ▦ Threads: every thread as one calm card (v51, ticket #bac2e1)
+const tvEl = document.getElementById("threads"), tvListEl = document.getElementById("tvList"), tvArchEl = document.getElementById("tvArch");
+const tvPop = document.createElement("div"), tvPrev = document.createElement("div");
+tvPop.id = "tvPop"; tvPrev.id = "tvPrev"; tvPrev.innerHTML = `<img alt="">`;
+document.body.append(tvPop, tvPrev);
+const tvAct = {};               // lane -> its last activity (seconds), from the events
+const tvStepsOpen = new Set();  // "lane|answer|group": tool steps unfolded in the open card
+const TV_EVENTS = new Set(["hello", "replay_end", "msg", "answer", "delta", "tool", "tool_done", "done", "batch", "live", "threads", "lane_meta", "board", "del", "status"]);
+const TV_ACT = new Set(["msg", "answer", "delta", "tool", "tool_done", "done", "batch", "live"]);
+const TV_CHEV = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>`;
+let tvExpanded = "", tvShowArch = false, tvWho = store.get("room-tv-who") === "me" ? "me" : "all", tvDense = store.get("room-tv-density") === "compact";
+let tvTimer = null, tvLastDraw = 0, tvSig = "", tvAllSteps = "", tvPrevFor = null, tvFitT = null;
+
+function tvKick(ev) {   // called at the end of handle(): note the activity, redraw soon
+  if (ev.t === "hello") for (const k of Object.keys(tvAct)) delete tvAct[k];
+  const lane = ev.t === "msg" ? ev.lane || ev.from : ev.lane;
+  if (lane && TV_ACT.has(ev.t)) tvAct[lane] = Math.max(tvAct[lane] || 0, +ev.ts || Date.now() / 1000);
+  if (view === "threads" && TV_EVENTS.has(ev.t)) tvSoon();
+}
+let tvHold = false;   // a button is pressed in the view: a redraw now would swallow the click
+function tvSoon() {   // at most 2 redraws a second
+  if (tvTimer) return;
+  tvTimer = setTimeout(() => { tvTimer = null; if (tvHold) tvSoon(); else if (view === "threads") tvRender(); }, Math.max(40, 500 - (Date.now() - tvLastDraw)));
+}
+const tvShort = s => { s = Math.max(0, Math.floor(s)); return s < 60 ? s + "s" : s < 3600 ? Math.floor(s / 60) + "m" : s < 86400 ? Math.floor(s / 3600) + "h" : Math.floor(s / 86400) + "d"; };
+function tvWhenText(lane) {
+  const b = busy[lane];
+  if (b) return "working " + tvShort((Date.now() - b.since) / 1000);
+  const t = threads.find(x => x.id === lane);
+  if (t && t.closed) return t.archived ? "archived " + tvShort(Date.now() / 1000 - t.archived) : "closed";
+  const a = Math.max(tvAct[lane] || 0, (t && t.ts) || 0), tag = doneUnseen.has(lane) ? "✓ done" : "idle";
+  return a ? `${tag} ${tvShort(Date.now() / 1000 - a)}` : tag;
+}
+function tvRowsAll() {
+  const people = Object.keys(colors || {});
+  if (me && !people.includes(me)) people.unshift(me);
+  const rows = people.map(p => ({ lane: p, owner: p, name: "Main", ts: 0 }));
+  for (const t of threads) if (t && t.id) rows.push({ lane: t.id, owner: t.owner || owner(t.id), name: t.name || threadName(t.id), closed: !!t.closed, archived: t.archived || 0, ts: t.ts || 0 });
+  return rows.filter(r => tvWho !== "me" || r.owner === me);
+}
+function tvTree(rows) {   // sub-threads under their parent; working first, then idle by last activity
+  const by = new Map(rows.map(r => [r.lane, r])), kids = new Map(), roots = [];
+  for (const r of rows) {
+    const p = (laneMeta[r.lane] || {}).parent;
+    let ok = !!p && p !== r.lane && by.has(p);
+    for (let x = p, n = 0; ok && x && by.has(x); n++) { if (x === r.lane || n > 12) ok = false; x = (laneMeta[x] || {}).parent; }   // no loops
+    if (ok) { if (!kids.has(p)) kids.set(p, []); kids.get(p).push(r); } else roots.push(r);
+  }
+  const order = (a, b) => (b.fw - a.fw) || (a.fw ? a.fs - b.fs : b.fa - a.fa) || String(a.lane).localeCompare(String(b.lane));
+  const stat = r => {
+    r.kids = (kids.get(r.lane) || []).map(stat).sort(order);
+    const b = busy[r.lane];
+    r.fw = !!b || r.kids.some(k => k.fw);
+    r.fs = Math.min(b ? b.since : Infinity, ...r.kids.map(k => k.fs));
+    r.fa = Math.max(tvAct[r.lane] || 0, r.ts || 0, ...r.kids.map(k => k.fa));
+    return r;
+  };
+  return roots.map(stat).sort(order);
+}
+function tvLastOf(lanes) {   // each lane's last person message and last answer, from the chat log (newest first)
+  const out = {};
+  let need = lanes.size * 2;
+  const els = log.querySelectorAll(".msg[data-lane]");
+  for (let i = els.length - 1; i >= 0 && need > 0; i--) {
+    const el = els[i], lane = el.dataset.lane;
+    if (!lane || !lanes.has(lane)) continue;
+    const o = out[lane] || (out[lane] = {});
+    if (el.classList.contains("answer")) {
+      if (o.ans) continue;
+      const bd = el.querySelector(".body"), a = bd && bd._answer;
+      o.ans = { parts: (a && a.parts) || (el._info && el._info.parts) || [], live: el.classList.contains("live"), id: el.dataset.id || "" };
+      need--;
+    } else if (!o.ask) {
+      const mt = el.querySelector(".mtext");
+      if (!mt) continue;
+      o.ask = { who: ((el.querySelector(".mhead .who") || {}).textContent || owner(lane)).trim(), text: el._text != null ? String(el._text) : mt.textContent || "" };
+      if (!o.ans) o.askFirst = true;
+      need--;
+    }
+  }
+  return out;
+}
+const tvClean = t => String(t || "").replace(/\[for [^\]\n]{1,80}\][ \t]*/g, "").replace(/^\s*\n|\n\s*$/g, "");
+function tvBrief(text) {   // the answer, a few short lines: no code blocks, no blank lines
+  const lines = tvClean(text).replace(/```[\s\S]*?(```|$)/g, "\n‹code›\n").split("\n").map(s => s.trim()).filter(Boolean);
+  const out = [];
+  let n = 0;
+  for (const l of lines) { if (n > 700) break; out.push(l.length > 400 ? l.slice(0, 400) + "…" : l); n += l.length; }
+  return out.map(l => inline(l.replace(/^[-*] /, "• ").replace(/^#{1,6}\s+/, ""))).join("<br>");
+}
+const tvCardOf = lane => {
+  for (const p of (laneMeta[lane] || {}).pins || []) {
+    if (p.kind !== "card") continue;
+    const c = board.cards.find(k => k.id === p.card);
+    if (c && !isDone(c)) return c;
+  }
+  return null;
+};
+const TV_KIND = p => p.kind === "card" ? 0 : p.kind === "file" && p.image ? 1 : p.kind === "note" ? 2 : 3;
+const tvPinsOf = lane => ((laneMeta[lane] || {}).pins || []).filter(p => ["card", "file", "note"].includes(p.kind)).sort((a, b) => TV_KIND(a) - TV_KIND(b));
+function tvPinHtml(p, big) {
+  if (p.kind === "card") {
+    const c = board.cards.find(k => k.id === p.card), done = c && isDone(c);
+    const tip = c ? `#${c.num} ${c.title} · ${colTitleOf(c)}` : (p.title || "deleted card");
+    return `<button class="tvPin tvChip" data-tvcard="${esc(p.card || "")}" title="${esc(tip)}">${c ? "#" + esc(c.num) : "#–"}${done ? " ✓" : ""}${big && c ? " " + esc(c.title) : ""}</button>`;
+  }
+  if (p.kind === "file" && p.image)
+    return `<button class="tvPin tvThumb" data-tvpic="${esc(p.file)}" aria-label="${esc(p.name || "picture")}"><img src="${q("/file/" + p.file)}&inline=1" alt="" loading="lazy"></button>`;
+  if (p.kind === "file") return `<a class="tvPin tvChip" href="${q("/file/" + p.file)}" download title="${esc(p.name || "file")}">📎 ${esc(p.name || "file")}</a>`;
+  return `<span class="tvPin tvChip tvNote" title="${esc(p.text || "")}">${esc(p.text || "")}</span>`;
+}
+function tvSegs(parts) {
+  const segs = [];
+  for (const p of parts) {
+    const last = segs[segs.length - 1];
+    if (p[0] === "tool") { if (last && last.tools) last.tools.push(p); else segs.push({ tools: [p] }); }
+    else if (String(p[1] || "").trim()) { if (last && last.text !== undefined) last.text += p[1]; else segs.push({ text: p[1] }); }
+  }
+  return segs;
+}
+function tvStepsHtml(key, tools, live) {
+  const open = tvStepsOpen.has(key), bad = tools.filter(p => p[4] === false).length;
+  return `<button class="tvSteps${open ? " on" : ""}" data-tvsteps="${esc(key)}" aria-expanded="${open}">⋯ ${tools.length} step${tools.length === 1 ? "" : "s"}${bad ? ` · ${bad} failed` : ""}</button>`
+    + (open ? `<div class="tvStepList">${tools.map(p => {
+        const st = p[4] === true ? "ok" : p[4] === false ? "err" : live ? "run" : "idle";
+        return `<div class="tvStep ${st}"${p[6] ? ` title="${esc(String(p[6]).slice(0, 400))}"` : ""}><i></i><b>${esc(toolName(p[1])[1])}</b><span>${esc(p[2] || "")}</span><em>${fmtSecs(p[5])}</em></div>`;
+      }).join("")}</div>` : "");
+}
+function tvRowHtml(r, L) {
+  const lane = r.lane, m = laneMeta[lane] || {}, b = busy[lane], last = L[lane] || {}, exp = tvExpanded === lane;
+  const mine = r.owner === me, here = mine && !r.closed && lane === (curThread || me), unseen = !b && doneUnseen.has(lane);
+  const cls = ["tvRow", b ? "work" : "idle", here ? "cur" : "", exp ? "exp" : "", unseen ? "unseen" : "", r.closed ? "arch" : ""].filter(Boolean).join(" ");
+  const card = tvCardOf(lane);
+  const tag = card ? `<button class="tvCardC" data-tvcard="${esc(card.id)}" title="${esc(`The card it works on: #${card.num} ${card.title} · ${colTitleOf(card)}`)}">#${esc(card.num)} ${esc(card.title)}</button>`
+    : m.goal ? `<span class="tvGoal" title="${esc(m.goal)}">${esc(m.goal)}</span>` : "";
+  const act = !mine ? "" : r.closed ? `<button class="tvBtn" data-tvreopen="${esc(lane)}" title="Bring it back to your thread bar">reopen</button>`
+    : `<button class="tvBtn" data-tvopen="${esc(lane)}" title="Switch the chat to this thread">open</button>`;
+  const head = `<div class="tvHead" data-k="h:${esc(lane)}"><i class="tvDot"></i><span class="tvName" title="${esc(laneLabel(lane) || r.name)}">`
+    + `${r.owner !== me ? `<span class="tvOwn">${esc(r.owner)} · </span>` : ""}${esc(r.name)}</span>${tag}`
+    + `<span class="tvWhen" data-tvwhen="${esc(lane)}"></span>${act}<button class="tvBtn tvChev" data-tvexp title="${exp ? "Fold" : "Open in full"}" aria-label="${exp ? "Fold" : "Open in full"}">${TV_CHEV}</button></div>`;
+  const ask = last.ask, ans = last.ans && !(last.askFirst && b) ? last.ans : null;   // a new question being worked on: not the old answer
+  const parts = ans ? ans.parts : [], tools = parts.filter(p => p[0] === "tool");
+  const text = parts.filter(p => p[0] === "text").map(p => p[1]).join("");
+  const waiting = `<span class="tvMuted">✻ working on it…</span>`;
+  let body;
+  if (!exp) {
+    const askH = ask ? `<div class="tvAsk"><b>${esc(ask.who)}</b>${esc(ask.text.replace(/\s+/g, " ").trim().slice(0, 300) || "📎 attachment")}</div>` : "";
+    const ansH = tvClean(text).trim() ? tvBrief(text) : b ? waiting
+      : m.summary ? `<span class="tvMuted">So far: </span>${esc(m.summary)}` : `<span class="tvMuted">${ask ? "No answer yet" : "Nothing here yet"}</span>`;
+    body = `<div class="tvBody" data-k="b:${esc(lane)}">${askH}<div class="tvAns">${ansH}</div></div>`;
+  } else {
+    const aid = ans ? ans.id : "", segs = tvSegs(parts);
+    if (tvAllSteps === lane) segs.forEach((sg, i) => { if (sg.tools) tvStepsOpen.add(`${lane}|${aid}|${i}`); });
+    const ansH = segs.map((sg, i) => sg.tools ? tvStepsHtml(`${lane}|${aid}|${i}`, sg.tools, ans.live)
+      : `<div class="tvText">${renderText(tvClean(sg.text))}</div>`).join("") || (b ? waiting : `<span class="tvMuted">${ask ? "No answer yet" : "Nothing here yet"}</span>`);
+    const askH = ask ? `<div class="tvAskFull"><b>${esc(ask.who)}</b><div class="tvText">${renderText(ask.text || "📎 attachment")}</div></div>` : "";
+    const plan = (m.plan || []).length ? `<div class="tvSec"><b>Checklist ${m.plan.filter(i => i.status === "done").length}/${m.plan.length}</b><ul class="tvPlan">`
+      + m.plan.map(i => `<li class="${esc(i.status || "")}">${i.status === "done" ? "☑" : i.status === "doing" ? "▸" : "☐"} ${esc(i.text || "")}</li>`).join("") + `</ul></div>` : "";
+    const goal = m.goal ? `<div class="tvSec"><b>For</b>${esc(m.goal)}</div>` : "";
+    const sum = m.summary ? `<div class="tvSec"><b>So far</b>${esc(m.summary)}${m.sum_ts ? ` <span class="tvMuted">· ${esc(agoText(m.sum_ts))}</span>` : ""}</div>` : "";
+    body = `<div class="tvBody" data-k="b:${esc(lane)}:x">${askH}<div class="tvAns">${ansH}</div>${goal}${plan}${sum}</div>`;
+  }
+  if (tvAllSteps === lane) tvAllSteps = "";
+  const pins = tvPinsOf(lane), note = b && busyNote(b) ? toolName(busyNote(b))[1] : "";
+  const steps = !exp && tools.length ? `<button class="tvStepsBtn" data-tvstepsall title="${esc(tools.length + " tool calls: show them")}">⋯ ${tools.length} step${tools.length === 1 ? "" : "s"}${note ? " · " + esc(note) : ""}</button>` : "";
+  const strip = !pins.length ? "" : exp ? `<div class="tvPins" data-k="s:${esc(lane)}:x">${pins.map(p => tvPinHtml(p)).join("")}</div>`
+    : `<div class="tvPins" data-k="s:${esc(lane)}" data-total="${pins.length}">${pins.slice(0, 5).map(p => tvPinHtml(p)).join("")}`
+      + `<button class="tvMore" data-tvmore="${esc(lane)}" title="All pins"${pins.length > 5 ? "" : " hidden"}>+${Math.max(0, pins.length - 5)}</button></div>`;
+  const foot = strip || steps ? `<div class="tvFoot" data-k="p:${esc(lane)}${exp ? ":x" : ""}">${strip || `<div class="tvPins"></div>`}${steps}</div>` : "";
+  return `<div class="${cls}" data-k="r:${esc(lane)}" data-lane="${esc(lane)}" tabindex="0" aria-expanded="${exp}" style="--tvp:${col(r.owner)}">${head}${body}${foot}</div>`;
+}
+function tvPatch(box, html, anchor) {   // swap in only what changed; keep what you were looking at where it was
+  if (box._h === html) return false;
+  box._h = html;
+  const view0 = tvEl.getBoundingClientRect(), top = view0.top;
+  let ref = "", off = 0;
+  if (anchor || tvEl.scrollTop > 4) {   // the row you clicked, or the first one on screen
+    const rows = [...box.querySelectorAll(".tvRow[data-lane]")];
+    const r = anchor ? rows.find(x => x.dataset.lane === anchor)
+      : rows.find(x => { const b = x.getBoundingClientRect(); return b.bottom > top + 1 && b.top < view0.bottom; });
+    if (r) { ref = r.dataset.lane; off = r.getBoundingClientRect().top - top; }
+  }
+  const old = new Map([...box.querySelectorAll("[data-k]")].map(x => [x.dataset.k, x]));
+  const t = document.createElement("template");
+  t.innerHTML = html;
+  const walk = el => {
+    for (const c of [...el.children]) {
+      const k = c.dataset && c.dataset.k;
+      if (k) {
+        const h = c.outerHTML, o = old.get(k);
+        if (o && o._h === h) { c.replaceWith(o); continue; }
+        c._h = h;
+      }
+      walk(c);
+    }
+  };
+  walk(t.content);
+  box.replaceChildren(t.content);
+  if (ref) {
+    const n = [...box.querySelectorAll(".tvRow[data-lane]")].find(x => x.dataset.lane === ref);
+    if (n) tvEl.scrollTop += n.getBoundingClientRect().top - top - off;
+  }
+  return true;
+}
+function tvFitStrip(s) {   // as many pins as fit on one line (5 at most), the rest behind +N
+  const more = s.querySelector(":scope > .tvMore");
+  if (!more) return;
+  const items = [...s.children].filter(c => c.classList.contains("tvPin")), total = +s.dataset.total || items.length;
+  items.forEach(c => { c.hidden = false; });
+  let shown = items.length;
+  const set = () => { more.hidden = shown >= total; more.textContent = "+" + (total - shown); };
+  set();
+  while (shown > 1 && s.scrollWidth > s.clientWidth + 1) { items[--shown].hidden = true; set(); }
+}
+function tvFitAll() {
+  tvEl.querySelectorAll(".tvRow:not(.exp) .tvPins[data-total]").forEach(tvFitStrip);
+  tvEl.querySelectorAll(".tvRow:not(.exp) .tvAns").forEach(a => a.classList.toggle("tvFade", a.scrollHeight > a.clientHeight + 2));
+}
+const tvWideNow = () => matchMedia("(min-width: 1600px)").matches;
+function tvColumns(fams) {   // [{rows, html}] -> one column, or two balanced by their closed height (opening a card never moves them)
+  if (!tvWideNow()) return `<div class="tvCol">${fams.map(f => f.html).join("")}</div>`;
+  const cols = [[], []], h = [0, 0];
+  for (const f of fams) { const i = h[1] < h[0] ? 1 : 0; cols[i].push(f.html); h[i] += f.rows; }
+  return cols.map(c => `<div class="tvCol">${c.join("")}</div>`).join("");
+}
+function tvRender(anchor) {
+  clearTimeout(tvTimer); tvTimer = null; tvLastDraw = Date.now();
+  tvEl.classList.toggle("tvDense", tvDense);
+  tvEl.classList.toggle("tvWide", tvWideNow());
+  tvEl.querySelectorAll("[data-tvwho]").forEach(x => x.classList.toggle("on", x.dataset.tvwho === tvWho));
+  tvEl.querySelectorAll("[data-tvdens]").forEach(x => x.classList.toggle("on", (x.dataset.tvdens === "compact") === tvDense));
+  const all = tvRowsAll(), open = all.filter(r => !r.closed);
+  const closed = all.filter(r => r.closed).sort((a, b) => (b.archived || 0) - (a.archived || 0));
+  if (tvExpanded && !all.some(r => r.lane === tvExpanded)) tvExpanded = "";
+  const L = tvLastOf(new Set(all.map(r => r.lane)));
+  const fam = r => tvRowHtml(r, L) + (r.kids.length ? `<div class="tvKids">${r.kids.map(k => `<div class="tvKid" data-k="k:${esc(k.lane)}">${fam(k)}</div>`).join("")}</div>` : "");
+  const roots = tvTree(open), count = r => 1 + r.kids.reduce((n, k) => n + count(k), 0);
+  const html = roots.length ? tvColumns(roots.map(r => ({ rows: count(r), html: `<div class="tvFam" data-k="f:${esc(r.lane)}">${fam(r)}</div>` })))
+    : `<div class="tvEmpty">${me ? "No threads yet" : "Connecting…"}</div>`;
+  const working = open.filter(r => busy[r.lane]).length;
+  document.getElementById("tvSub").textContent = me ? `${working} working · ${open.length - working} idle${closed.length ? ` · ${closed.length} archived` : ""}` : "Every conversation at a glance";
+  let changed = tvPatch(tvListEl, html, anchor);
+  document.getElementById("tvArchBar").innerHTML = closed.length
+    ? `<button class="tvArchBtn" data-tvarch aria-expanded="${tvShowArch}">${tvShowArch ? "▴ hide archived" : `▾ show archived (${closed.length})`}</button>` : "";
+  changed = tvPatch(tvArchEl, tvShowArch && closed.length ? tvColumns(closed.map(r => ({ rows: 1, html: `<div class="tvFam" data-k="a:${esc(r.lane)}">${tvRowHtml(r, L)}</div>` }))) : "", anchor) || changed;
+  if (changed) tvFitAll();
+  tvTick();
+}
+function tvTick() {
+  const tb = document.getElementById("tbar"), tc = tb && tb.querySelector(".tswitch .tcount");
+  if (tc) {   // no room for "8 threads" next to the thread's name: leave it out (measured in one go, no flicker)
+    tb.classList.remove("tvTight");
+    const nm = tb.querySelector(".tswitch .tsname");
+    tb.classList.toggle("tvTight", tc.scrollWidth > tc.clientWidth + 1 || (!!nm && nm.scrollWidth > nm.clientWidth + 1));
+  }
+  const n = Object.keys(busy).length, badge = document.getElementById("tvCount");
+  if (badge && badge.textContent !== (n ? String(n) : "")) badge.textContent = n ? n : "";
+  if (view !== "threads") return;
+  const sig = JSON.stringify([me, curThread, Object.keys(busy).sort(), [...doneUnseen].sort(), metaRev, Object.keys(colors || {}),
+    threads.map(t => [t.id, t.name, !!t.closed, t.archived || 0])]);
+  if (sig !== tvSig) { if (tvSig) tvSoon(); tvSig = sig; }
+  tvEl.querySelectorAll("[data-tvwhen]").forEach(s => { const t = tvWhenText(s.dataset.tvwhen); if (s.textContent !== t) s.textContent = t; });
+  if (tvPrevFor && !tvPrevFor.isConnected) tvHidePrev();
+}
+setInterval(tvTick, 1000);
+addEventListener("resize", () => {
+  clearTimeout(tvFitT);
+  tvFitT = setTimeout(() => { if (view !== "threads") return; if (tvWideNow() !== tvEl.classList.contains("tvWide")) tvRender(); else tvFitAll(); }, 150);
+});
+function tvOpenThread(lane) {
+  setThread(lane === me ? "" : lane);
+  if (!wide()) setView("chat");
+  else tvSoon();
+}
+function tvLightbox(lane, file) {
+  const pics = tvPinsOf(lane).filter(p => p.kind === "file" && p.image).map(p => ({ file: p.file, name: p.name || "" }));
+  openLightbox(pics, Math.max(0, pics.findIndex(p => p.file === file)));
+}
+function tvPinAct(t, lane) {   // a pin was clicked (in a card or in the +N popover)
+  const c = t.closest("[data-tvcard]");
+  if (c) { tvClosePop(); if (board.cards.some(k => k.id === c.dataset.tvcard)) openSheet(c.dataset.tvcard); else toast("That card was deleted"); return true; }
+  const p = t.closest("[data-tvpic]");
+  if (p) { tvHidePrev(); tvClosePop(); tvLightbox(lane, p.dataset.tvpic); return true; }
+  const m = t.closest("[data-tvmore]");
+  if (m) { if (tvPop.classList.contains("on") && tvPop.dataset.lane === m.dataset.tvmore) tvClosePop(); else tvOpenPop(m.dataset.tvmore, m); return true; }
+  return !!t.closest("a[download]");
+}
+function tvOpenPop(lane, btn) {
+  const pins = tvPinsOf(lane);
+  tvPop.dataset.lane = lane;
+  tvPop.innerHTML = `<div class="tvPopH">Pinned in ${esc(laneLabel(lane) || lane)} · ${pins.length}</div><div class="tvPopL">${pins.map(p => tvPinHtml(p, true)).join("")}</div>`;
+  tvPop.classList.add("on");
+  tvPop._t = Date.now();
+  const r = btn.getBoundingClientRect(), w = tvPop.offsetWidth, h = tvPop.offsetHeight;
+  tvPop.style.left = Math.round(Math.max(8, Math.min(innerWidth - w - 8, r.left))) + "px";
+  tvPop.style.top = Math.round(r.bottom + 8 + h > innerHeight - 8 ? Math.max(8, r.top - h - 8) : r.bottom + 8) + "px";
+}
+function tvClosePop() { tvPop.classList.remove("on"); tvPop.dataset.lane = ""; }
+function tvShowPrev(th) {
+  if (matchMedia("(hover: none)").matches) return;
+  const img = tvPrev.firstElementChild, src = (th.querySelector("img") || {}).src;
+  if (!src) return;
+  tvPrevFor = th;
+  const place = () => {
+    if (tvPrevFor !== th) return;
+    const r = th.getBoundingClientRect(), w = tvPrev.offsetWidth, h = tvPrev.offsetHeight;
+    tvPrev.style.left = Math.round(Math.max(8, Math.min(innerWidth - w - 8, r.left + r.width / 2 - w / 2))) + "px";
+    tvPrev.style.top = Math.round(r.top - h - 8 < 8 ? r.bottom + 8 : r.top - h - 8) + "px";
+  };
+  if (img.getAttribute("src") !== src) { img.onload = place; img.src = src; }
+  place();
+  tvPrev.classList.add("on");
+}
+function tvHidePrev() { tvPrevFor = null; tvPrev.classList.remove("on"); }
+for (const host of [tvEl, tvPop]) {
+  host.addEventListener("mouseover", e => { const th = e.target.closest(".tvThumb"); if (th && th !== tvPrevFor) tvShowPrev(th); });
+  host.addEventListener("mouseout", e => { const th = e.target.closest(".tvThumb"); if (th && !th.contains(e.relatedTarget)) tvHidePrev(); });
+}
+tvPop.addEventListener("click", e => { tvPinAct(e.target, tvPop.dataset.lane); });
+tvEl.addEventListener("pointerdown", () => { tvHold = true; }, true);
+for (const t of ["pointerup", "pointercancel", "blur"]) addEventListener(t, () => { tvHold = false; }, true);
+addEventListener("pointerdown", e => { if (tvPop.classList.contains("on") && !tvPop.contains(e.target) && !e.target.closest("[data-tvmore]")) tvClosePop(); }, true);
+addEventListener("keydown", e => { if (e.key === "Escape" && tvPop.classList.contains("on")) tvClosePop(); });
+tvEl.addEventListener("scroll", () => {   // (a tap can scroll its +N into view: not that)
+  if (tvPop.classList.contains("on") && Date.now() - (tvPop._t || 0) > 400) tvClosePop();
+  if (tvPrevFor) tvHidePrev();
+}, { passive: true });
+function tvToggle(lane) {
+  tvExpanded = tvExpanded === lane ? "" : lane;
+  tvRender(lane);
+}
+tvEl.addEventListener("click", e => {
+  const t = e.target;
+  const w = t.closest("[data-tvwho]");
+  if (w) { tvWho = w.dataset.tvwho; store.set("room-tv-who", tvWho); tvRender(); return; }
+  const d = t.closest("[data-tvdens]");
+  if (d) { tvDense = d.dataset.tvdens === "compact"; store.set("room-tv-density", tvDense ? "compact" : "comfortable"); tvRender(); return; }
+  if (t.closest("[data-tvarch]")) { tvShowArch = !tvShowArch; tvRender(); return; }
+  const row = t.closest(".tvRow"), lane = row ? row.dataset.lane : "";
+  if (!row) return;
+  if (tvPinAct(t, lane)) return;
+  const o = t.closest("[data-tvopen]");
+  if (o) { tvOpenThread(o.dataset.tvopen); return; }
+  const ro = t.closest("[data-tvreopen]");
+  if (ro) { post("/thread", { op: "reopen", thread: ro.dataset.tvreopen }); toast("Reopened: it's back in your thread bar"); return; }
+  const sg = t.closest("[data-tvsteps]");
+  if (sg) { const k = sg.dataset.tvsteps; if (!tvStepsOpen.delete(k)) tvStepsOpen.add(k); tvRender(lane); return; }
+  if (t.closest("[data-tvstepsall]")) { tvAllSteps = lane; tvExpanded = lane; tvRender(lane); return; }
+  if (t.closest("[data-tvexp]")) { tvToggle(lane); return; }
+  if (t.closest("a, button, input, textarea, select")) return;
+  if (row.classList.contains("exp") && !t.closest(".tvHead")) return;   // reading the open card: only its header folds it
+  const sel = getSelection();
+  if (sel && !sel.isCollapsed && row.contains(sel.anchorNode) && String(sel).trim()) return;   // selecting text in this card
+  tvToggle(lane);
+});
+tvEl.addEventListener("keydown", e => {
+  if ((e.key === "Enter" || e.key === " ") && e.target.classList && e.target.classList.contains("tvRow")) {
+    e.preventDefault();
+    const lane = e.target.dataset.lane;
+    tvToggle(lane);
+    const n = tvEl.querySelector(`.tvRow[data-lane="${CSS.escape(lane)}"]`);
+    if (n) n.focus({ preventScroll: true });
+  }
+});
+
 buildToolbar(); setCursor();
 wb.view = { x: 0, y: 0, k: 1 };
-setView(["chat", "tasks", "draw", "files", "timeline", "meetings"].includes(store.get("room-view")) ? store.get("room-view") : "chat");
+setView(["chat", "tasks", "draw", "files", "timeline", "meetings", "threads"].includes(store.get("room-view")) ? store.get("room-view") : "chat");
 if (!wb.strokes.length) requestAnimationFrame(() => { wb.view = { x: canvas.clientWidth / 2 || 0, y: canvas.clientHeight / 2 || 0, k: 1 }; });
 </script>
 </body>

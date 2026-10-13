@@ -26,6 +26,7 @@ import socket
 import ssl
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import urllib.error
@@ -33,7 +34,7 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = 33   # the server tells older clients to update; bump when the protocol changes
+VERSION = 39   # the server tells older clients to update; bump when the protocol changes
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CSI = "\x1b["
 RESET, BOLD, DIM = CSI + "0m", CSI + "1m", CSI + "2m"
@@ -78,6 +79,7 @@ COMMANDS = [
     ("/auto", "toggle auto mode: run Claude's actions on your PC without asking"),
     ("/tested", "done playtesting: free UEFN for your other threads"),
     ("/auto on", "auto mode on"),
+    ("/sound approvals off", "no beep when Claude asks to act on your PC (on: beep again)"),
     ("/auto off", "auto mode off: approve each action"),
     ("/board", "open the task board (or Tab on an empty line)"),
     ("/draw", "open the whiteboard"),
@@ -107,6 +109,20 @@ FUN = ["Pondering", "Noodling", "Brewing", "Conjuring", "Percolating", "Mulling"
        "Sleuthing", "Crunching", "Moseying", "Doodling", "Summoning", "Haunting", "Lurking", "Creeping", "Flickering", "Rummaging",
        "Cooking", "Vibing", "Musing", "Churning", "Fiddling", "Plotting", "Bamboozling", "Clauding", "Herding pixels", "Consulting the fog",
        "Sharpening pencils", "Reticulating splines", "Waking the editor", "Counting pages", "Tiptoeing"]
+
+
+TIPS = ["/saved lists your ★ saved messages", "/remind 18:00 playtest sets a reminder", "/shot puts a picture of your screen in the chat",
+        "/recap: a “Previously on…” of what happened while you were away", "/continue opus picks up after a Stop on another model",
+        "/compact shrinks a long conversation now and saves usage", "/poll and /vote run a quick poll",
+        "Esc Esc on an empty line stops Claude's running answer", "Ctrl+O or /tool N shows a tool call in full",
+        "Tab opens tasks · files · whiteboard", "/tested frees the playtest for your other threads",
+        "/locks shows the Lore locks · /release frees yours on checked-in files", "/sound approvals off mutes the approval beep",
+        "/operator turns a thread into a control thread answered by the host's Claude Code", "/effort auto: quick questions answer faster"]
+
+
+def room_tip():
+    """A tip about the room for the status line, changing every 20 seconds."""
+    return "Tip: " + TIPS[int(time.time() // 20) % len(TIPS)]
 
 
 def fun_word(lane, since):
@@ -340,6 +356,7 @@ class Screen:
         self.conn = None
         self.events = None
         self.auto = False
+        self.mute_approval = False   # the person's setting: no beep on approval prompts
         self.approvals = []       # exec requests waiting for y/n
         self.approval_since = 0.0
         self.sel = 0              # highlighted command suggestion
@@ -430,13 +447,15 @@ class Screen:
         mine = [l for l in self.locks if l.get("owner") == self.me]
         if self.locks:
             bits.append(f"🔒 {len(self.locks)} locked" + (f" ({len(mine)} yours)" if mine else "") + " · /locks")
-        if self.busy:
-            lanes = []
-            for lane, b in self.busy.items():
-                note = f" · {b['note']}" if b["note"] and b["note"] != "thinking" else ""
-                later = " (shown when done)" if lane in self.held else ""
-                label = owner(lane) + (f" #{self.thread_name(lane)}" if self.thread_name(lane) else "")
-                lanes.append(f"✻ {fun_word(lane, b['since'])}… {label} {int(time.time() - b['since'])}s{note}{later}")
+        lanes = []
+        for lane, b in self.busy.items():
+            if owner(lane) != self.me:   # only your own threads: the other person's are on their PC
+                continue
+            note = f" · {b['note']}" if b["note"] and b["note"] != "thinking" else ""
+            later = " (shown when done)" if lane in self.held else ""
+            label = f"#{self.thread_name(lane)}" if self.thread_name(lane) else "Main"
+            lanes.append(f"✻ {fun_word(lane, b['since'])}… {label} {int(time.time() - b['since'])}s{note}{later}")
+        if lanes:
             bits.append("  ".join(lanes))
         typers = [n for n, t in self.typing.items() if time.time() - t < 3 and n != self.me]
         if typers:
@@ -449,6 +468,8 @@ class Screen:
                         + " · Tab: tasks · files · whiteboard · /help")
         elif used and max(l["percent"] for l in lims) >= 80:
             bits.append(f"⚠ usage: {used}")
+        if len(lanes) <= 1:
+            bits.append(room_tip())
         return " · ".join(bits)
 
     def draw_bottom(self):
@@ -1439,6 +1460,7 @@ class Screen:
                 self.thread = ""
             set_active_lanes(ev.get("busy_secs") or {})
             report_lease()   # the room forgets it when it restarts
+            self.mute_approval = bool((ev.get("settings") or {}).get("mute_approval_sound"))
             ZONES[:] = ev.get("zones") or []
             self.log_text, self.at_line_start, self.header_buf = "", True, None
             self.resize(force=True)
@@ -1524,6 +1546,7 @@ class Screen:
             self.locks = ev["locks"]
         elif t == "settings":
             self.model = (ev.get("model_label") or "default model") + (f" · {ev['effort']}" if ev.get("effort") else "")
+            self.mute_approval = bool(ev.get("mute_approval_sound"))
         elif t == "notify":
             self.add_notice(ev.get("title", ""), ev.get("body", ""), ev.get("kind", "info"))
         elif t == "zones":   # places in the map the threads depend on
@@ -1606,7 +1629,8 @@ class Screen:
                 self.show_sys("auto mode skipped: someone else also wrote in this turn, so you decide")
             ev["_deadline"] = time.time() + ev.get("timeout", 120)
             self.approvals.append(ev)
-            self.w("\a")   # beep / flash the taskbar so nobody forgets to answer
+            if not self.mute_approval:
+                self.w("\a")   # beep / flash the taskbar so nobody forgets to answer
             if len(self.approvals) == 1:
                 self.approval_since = time.time()
 
@@ -1657,7 +1681,11 @@ class Screen:
         self.conn.post("/exec_started", {"id": ev["id"]})
 
         def work():
-            ok, output = run_tool(ev["tool"], ev["args"], self.conn, ev.get("lane") or self.me, ev.get("thread", ""))
+            RUNNING[0] += 1
+            try:
+                ok, output = run_tool(ev["tool"], ev["args"], self.conn, ev.get("lane") or self.me, ev.get("thread", ""))
+            finally:
+                RUNNING[0] -= 1
             self.conn.post("/exec_result", {"id": ev["id"], "ok": ok, "output": output})
             self.events.put({"t": "_exec_done", "ok": ok, "output": output,
                              "summary": summarize(ev["tool"], ev["args"])})
@@ -1714,6 +1742,12 @@ class Screen:
                 self.buf, self.cursor = "", 0
             elif self.buf.strip().lower() == "/update":
                 self.want_update = True
+                self.buf, self.cursor = "", 0
+            elif self.buf.strip().lower() in ("/sound approvals off", "/sound approvals on"):
+                off = self.buf.strip().lower().endswith("off")
+                conn.post("/settings", {"mute_approval_sound": off})
+                self.mute_approval = off
+                self.show_sys("approval prompts are silent now" if off else "approval prompts beep again")
                 self.buf, self.cursor = "", 0
             elif self.buf.strip().lower() == "/tested":
                 set_lease(None)
@@ -2266,17 +2300,44 @@ def scan_locks(repo):
     return locks
 
 
+def main_signature(repo):
+    """Signature of main's latest revision on the server ("" if unknown); cached for a minute."""
+    hit = _cache.get("main_sig")
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    m = re.search(r"Signature\s*:\s*([0-9a-f]{64})", lore_out(repo, "history", "1", "--branch", "main", "--remote"))
+    _cache["main_sig"] = (time.time(), m.group(1) if m else "")
+    return _cache["main_sig"][1]
+
+
 def clean_files(repo, rels):
-    """Which of `rels` Lore positively reports as having no un-checked-in changes. Anything unclear
-    counts as changed, so a lock is never released by mistake."""
+    """Which of `rels` are really checked in: no local changes AND the same as main's latest revision. UEFN's
+    Automatic Backup commits work to the person's own branch (main-<id>), where `lore status` calls it clean
+    although it never reached main; releasing then let the other person take the file and block this Check In.
+    Anything unclear counts as changed, so a lock is never released by mistake."""
     if not rels:
         return []
     out = lore_out(repo, "status", "--scan", *rels)
     if "No tracked changes" in out:
-        return list(rels)
-    if "Tracked changes" not in out:
+        local = list(rels)
+    elif "Tracked changes" in out:
+        local = [r for r in rels if r not in out]
+    else:
         return []
-    return [r for r in rels if r not in out]
+    sig = main_signature(repo) if local else ""
+    if not sig:
+        return []
+    targets = os.path.join(tempfile.gettempdir(), f"claude-room-lock-check-{os.getpid()}.txt")
+    try:
+        with open(targets, "w", encoding="utf-8") as f:
+            f.write("".join(r + "\n" for r in local))
+        diff = lore_out(repo, "revision", "diff", sig, "--targets", targets)
+    except (OSError, subprocess.SubprocessError):
+        return []
+    if re.search(r"\[Error\]|error:", diff, re.I):
+        return []
+    differ = {line[2:].strip() for line in diff.splitlines() if re.match(r"^[AMD] ", line)}
+    return [r for r in local if r not in differ]
 
 
 def release_my_locks(events, only_older_than=0.0, quiet=False):
@@ -2406,7 +2467,7 @@ def lock_reporter(conn, events):
 # Each person has their own copy of the UEFN project; a change made on a copy that's behind the shared one
 # could overwrite what the other person checked in. So every change waits until the copy is up to date.
 SYNC_CACHE = {}
-READ_UEFN = re.compile(r"^(get|list|find|describe|read|query|search|inspect|count|is|has|can|lookup|print|dump|validate)", re.I)
+READ_UEFN = re.compile(r"^(get|list|find|describe|read|query|search|inspect|count|is|has|can|lookup|print|dump|validate|trace|raycast|line_trace|sweep|overlap)", re.I)
 
 
 def lore_sync_state(repo, fresh=False):
@@ -2684,6 +2745,33 @@ def project_wide_gate(tool, args, lane):
     return None
 
 
+# ---- commands that only look: they don't wait behind another thread's long change ----------------
+READ_CMD = re.compile(r"^\s*(cd|Set-Location|sl|Get-Content|gc|cat|type|Select-String|sls|Get-ChildItem|gci|dir|ls|Get-Item|gi|"
+                      r"Test-Path|Resolve-Path|Split-Path|Join-Path|Get-FileHash|Measure-Object|measure|Select-Object|select|"
+                      r"Sort-Object|sort|Group-Object|Where-Object|where|\?|Format-\w+|ft|fl|Out-String|Write-Output|echo|"
+                      r"findstr|Get-Date|Get-Process|tasklist|ConvertFrom-Json|ConvertTo-Json|\$[\w:]+|['\"]|%\s*\{|"
+                      r"ForEach-Object\s*\{|foreach\s*\()", re.I)
+WRITE_HINT = re.compile(r">|(?<![\w.\\/-])(Set-(?!Location)\w+|Remove-\w+|New-\w+|Copy-\w+|Move-\w+|Rename-\w+|Out-File|"
+                        r"Add-Content|Clear-\w+|Start-\w+|Stop-\w+|Invoke-\w+|Expand-Archive|Compress-Archive|"
+                        r"Write-(?!Output)\w+|Import-\w+|Export-\w+|mkdir|md|rmdir|rm|del|erase|copy|move|ren|xcopy|robocopy|"
+                        r"python\w*|py|pip|node|npm|npx|blender\w*|lore|git|curl|wget|iwr|irm|powershell|pwsh|cmd|reg|"
+                        r"schtasks|sc|net|taskkill|msiexec|winget|choco)(?![\w.-])|\.(ps1|exe|bat|cmd)\b(?!\s*['\"])|"
+                        r"\[(System\.)?IO\.(File|Directory)\]::(Write|Append|Delete|Copy|Move|Create|Replace)|"
+                        r"\.(Delete|MoveTo|CopyTo|Create|Save|Write\w*|Kill)\(", re.I)
+
+
+def read_only_command(command):
+    """True only for a command made of reading cmdlets (anything that might change or start something: False)."""
+    command = str(command or "")
+    if not command.strip() or WRITE_HINT.search(command):
+        return False
+    return all(READ_CMD.match(s) for s in re.split(r"[;\n|]", command) if s.strip() and s.strip() not in ("}", "{"))
+
+
+PC_HOLDER = {}       # the action holding PC_LOCK: {"thread", "what", "since"}
+RUNNING = [0]        # actions running now (the terminal doesn't restart itself meanwhile)
+
+
 # ---- the UEFN playtest belongs to one thread at a time ------------------------------------------
 # The first thread that starts a session holds it; the person's other threads get HELD for session calls, builds,
 # imports and editor changes until it is free: that thread calls StopSession, the person clicks Done testing (or
@@ -2906,6 +2994,15 @@ def code_snapshot(repo, keep=True):
     return snap
 
 
+def synced_from_main(repo, rel):
+    """True when `rel` on disk is exactly main's latest version: a Sync (or a reset) changed it, not anyone's edit."""
+    sig = main_signature(repo)
+    if not sig:
+        return False
+    out = lore_out(repo, "diff", "--source", sig, rel)   # main's file against the one on disk: empty when they match
+    return not re.search(r"^(---|\+\+\+|@@)|\[Error\]|error:", out, re.M | re.I)
+
+
 def enforce_effects(repo, before, lane=None, changed=None):
     """After a command: every changed code file must get its Lore lock; if someone else holds it (or the
     lock can't be checked), or the person's other thread is changing it, the change is undone.
@@ -2921,6 +3018,8 @@ def enforce_effects(repo, before, lane=None, changed=None):
         if not owner:
             if changed is not None:
                 changed.append((repo, rel))
+            continue
+        if synced_from_main(repo, rel):   # a Sync Latest landed meanwhile: undoing it would revert the other person's work
             continue
         full = os.path.join(repo, *rel.split("/"))
         saved = _content.get((repo, rel))
@@ -2983,8 +3082,8 @@ def run_tool(tool, args, conn=None, lane=None, thread=""):
     if tool not in PC_CHANGING:
         return run_tool_checked(tool, args, conn)
     op = uefn_op(tool, args)
-    if op == "read":   # looking at the editor never waits for the other threads' changes
-        return run_tool_unguarded(tool, args, conn)
+    if op == "read" or (tool == "run_command" and read_only_command(args.get("command"))):
+        return run_tool_unguarded(tool, args, conn)   # looking never waits for the other threads' changes
     held = project_wide_gate(tool, args, lane)
     if held:
         return False, held
@@ -3006,7 +3105,12 @@ def run_tool(tool, args, conn=None, lane=None, thread=""):
         return False, (f"BUSY: {hit[0]} is being changed by your other thread “{hit[1]}” right now (waited 5 minutes). "
                        "Tell the person; work on something else or try again when that thread is done.")
     if not PC_LOCK.acquire(timeout=600):
-        return False, "BUSY: another thread's action has been running on this PC for 10 minutes; try again later"
+        h = dict(PC_HOLDER)
+        who = (f"your other thread “{h.get('thread')}” ({h.get('what')}, running {int((time.time() - h.get('since', time.time())) / 60)} min)"
+               if h else "another thread's action")
+        return False, (f"BUSY: {who} has held this PC's change line for 10 minutes; reading still works. Try again later "
+                       "or thread_note that thread.")
+    PC_HOLDER.update({"thread": thread or "Main", "what": summarize(tool, args)[:80], "since": time.time()})
     try:
         changed = []
         ok, output = run_tool_checked(tool, args, conn, lane, changed)
@@ -3018,6 +3122,7 @@ def run_tool(tool, args, conn=None, lane=None, thread=""):
                        "(thread_note) so it isn't surprised.")
         return ok, output
     finally:
+        PC_HOLDER.clear()
         PC_LOCK.release()
 
 
@@ -3405,7 +3510,7 @@ def main():
             if n_keys:
                 screen.last_key = time.time()
             idle = (not screen.buf and not screen.approvals and not screen.prompt and not screen.pen
-                    and time.time() - screen.last_key > 20)
+                    and time.time() - screen.last_key > 20 and not RUNNING[0])   # never in the middle of an action
             if screen.latest > VERSION and idle and time.time() > screen.update_postponed and not screen.update_at:
                 screen.update_at = time.time() + 10
             if screen.update_at and not idle:

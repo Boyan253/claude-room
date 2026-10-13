@@ -1,0 +1,37 @@
+# --- your room's config and secrets: never commit these ---
+room.json
+secrets.json
+.env
+*.env
+
+# --- runtime data the server writes next to server.py ---
+state.json
+history.jsonl
+tools.jsonl
+notes.json
+board.json
+timeline.json
+pins.json
+people.jsonl
+files/
+files.json
+zones.json
+reactions.json
+polls.json
+whiteboard.*
+feedback.json
+.dev_seen
+meetings/
+meeting_uploads/
+quiet/
+*.tmp
+
+# --- the folder Claude runs in (CLAUDE.md, lessons, house rules, your project links) ---
+workspace/
+
+# --- logs ---
+*.log
+
+# --- Python ---
+__pycache__/
+*.pyc

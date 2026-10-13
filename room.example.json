@@ -1,0 +1,30 @@
+{
+  "port": 8765,
+  "host": "alice",
+  "people": {
+    "alice": "<token>",
+    "sam": "<token>"
+  },
+  "public_url": "",
+  "model": "",
+  "effort": "",
+  "prefs": {},
+  "claude_args": [],
+  "quiet_seconds": 2.0,
+  "max_wait_seconds": 20,
+  "compact_at": 200000,
+  "approval_seconds": 120,
+  "dev_token": "",
+  "gemini_api_key": "",
+  "gemini_image_model": "",
+  "tenor_api_key": "",
+  "meetings_dir": "",
+  "meetings_language": "",
+  "deepgram_api_key": "",
+  "groq_api_key": "",
+  "codex_bridge": {
+    "url": "",
+    "key": ""
+  },
+  "epic_names": {}
+}

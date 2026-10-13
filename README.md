@@ -7,6 +7,23 @@ approval.
 One small Python server (standard library only) runs on the host's PC and drives the `claude` CLI.
 People join from a browser page, from a terminal client (`chat.py`), or both at once.
 
+![Two people and their parallel Claude threads in one room](docs/screenshots/chat.png)
+
+<table>
+  <tr>
+    <td width="33%"><img src="docs/screenshots/threads.png" alt="Threads view: every thread with its card, status and latest answer"></td>
+    <td width="33%"><img src="docs/screenshots/tasks.png" alt="Tasks board: Claude makes and moves the cards"></td>
+    <td width="33%"><img src="docs/screenshots/timeline.png" alt="Timeline: the project's story, moment by moment"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Threads</b>: what every thread is doing</td>
+    <td align="center"><b>Tasks</b>: Claude keeps the board up to date</td>
+    <td align="center"><b>Timeline</b>: the project's story</td>
+  </tr>
+</table>
+
+<sub>Screenshots are from a demo room: two people (alice and sam) building a small UEFN map.</sub>
+
 ## What it does
 
 - **Parallel threads.** Every person has a main thread, and can open more (`/thread new Inventory UI`).

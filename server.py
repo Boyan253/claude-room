@@ -124,6 +124,27 @@ except (OSError, ValueError, KeyError):
     CODEX_MODELS = {CODEX_DEFAULT_MODEL: {"displayName": "GPT-6-Astra", "defaultReasoningEffort": "medium",
         "supportedReasoningEfforts": [{"reasoningEffort": e} for e in ("low", "medium", "high", "xhigh", "max")]}}
 MODELS.update({"codex/" + mid: "codex:" + mid for mid in CODEX_MODELS})
+with open(os.path.join(ROOT, "gemini_models.json"), encoding="utf-8") as _gemini_catalog:
+    GEMINI_MODELS = json.load(_gemini_catalog)
+MODELS.update({info["key"]: "gemini:" + mid for mid, info in GEMINI_MODELS.items()})
+
+
+def is_gemini_model(model):
+    return str(model or "").startswith("gemini:") and str(model).split(":", 1)[1] in GEMINI_MODELS
+
+
+def gemini_model_id(model):
+    if not is_gemini_model(model):
+        raise ValueError("Unknown Gemini model")
+    return str(model).split(":", 1)[1]
+
+
+def assistant_name(model):
+    return "Gemini" if is_gemini_model(model) else "Codex" if is_codex_model(model) else "Claude"
+
+
+def is_external_model(model):
+    return is_codex_model(model) or is_gemini_model(model)
 
 def is_codex_model(model):
     return model == "codex" or str(model or "").startswith("codex:")
@@ -132,6 +153,8 @@ def codex_model_id(model):
     return model.split(":", 1)[1] if str(model).startswith("codex:") else CODEX_DEFAULT_MODEL
 
 def model_label(model_id):
+    if is_gemini_model(model_id):
+        return GEMINI_MODELS[gemini_model_id(model_id)]["label"]
     if is_codex_model(model_id):
         mid = codex_model_id(model_id)
         return "Codex · " + CODEX_MODELS.get(mid, {}).get("displayName", mid)
@@ -782,6 +805,7 @@ def join_info(cfg, name):
 MIN_PC_VERSION = 3   # oldest chat.py that can share a PC
 MIN_CHANGE_VERSION = 14   # oldest chat.py allowed to change things on a PC (it enforces Lore locks)
 RELEASE_NOTES = {   # shown with "update available" in the browser and the terminal
+    56: "Gemini 4 Argon, 3.1 Pro, 3.8 Flash and 3.6 Flash are available alongside Claude and Codex, with model-specific thinking levels and the same room tools and PC permissions.",
     13: "Premium look, Trello-style board with #numbers, Files view in the terminal, the browser's Update button updates your terminal too.",
     14: "Lore locks are enforced for everything the room changes in your UEFN project; old terminals can only read.",
     15: "Notifications (🔔), open your terminal from the browser, live 🔒 lock list with Ask to release, locks free themselves after Check In, terminals update themselves when idle.",
@@ -796,6 +820,8 @@ RELEASE_NOTES = {   # shown with "update available" in the browser and the termi
     23: "Timeline tab: the project's story with pictures, cards, sketches and notes. Add a moment from any chat message (📌 → Timeline) or card; cards reaching Done add themselves. /timeline in the terminal.",
     22: "Long conversations compact themselves (above 200k tokens; /compact does it now). Every request re-reads the whole conversation, so this saves a lot of usage. Sizes are in the usage panel.",
     21: "Claude usage in the top bar: how much of the session and the week is used, and when each resets (terminal: status line and /usage).",
+    46: "A message you send while Claude works now shows between what it already said and what it says next, like in Claude Code; pictures show in their own thread too.",
+    45: "/compact_at N (host) changes when long threads are compacted, without a restart.",
     44: "Approvals survive a terminal restart (they're asked again in the reopened window), and you can take a message back: 🗑 on your own message (or /unsend for your last one) also stops Claude working on it.",
     43: "The status line under the message box shows only your own working threads, with a tip about the room while one or none works.",
     42: "A playtest or editor change on one person's PC is only reported to that person's threads, so the other person's threads no longer think they must wait or stop a playtest.",
@@ -814,7 +840,7 @@ RELEASE_NOTES = {   # shown with "update available" in the browser and the termi
 }
 CHANGING_TOOLS = ("write_file", "run_command", "uefn_call", "file_get")
 READ_UEFN = re.compile(r"^(get|list|find|describe|read|query|search|inspect|count|is|has|can|lookup|print|dump|validate)", re.I)   # same as chat.py
-ROOM_VERSION = 54   # shown on the page, next to the name and in Settings
+ROOM_VERSION = 56   # shown on the page, next to the name and in Settings
 BROWSER_ANSWER_VERSION = 5   # oldest chat.py that accepts y / n / a clicked in the browser
 UPDATE_COMMAND_VERSION = 7   # oldest chat.py with /update
 
@@ -1503,7 +1529,12 @@ class Room:
         model, effort = self.pref(lane)
         if effort == "auto":
             effort = self.auto_effort(lane)
-        return self.turn_model.get(lane) or model, effort
+        model = self.turn_model.get(lane) or model
+        if is_gemini_model(model):
+            info = GEMINI_MODELS[gemini_model_id(model)]
+            if effort not in info["efforts"]:
+                effort = info["default_effort"]
+        return model, effort
 
     def threads_text(self, name, everyone=False):
         meta, rows = self.lane_meta_all(), []
@@ -2095,7 +2126,7 @@ class Room:
         with self.lock:
             pipe = self.live_stdin.get(lane)
             b = self.busy.get(lane)
-            if not pipe and b and not b.get("compacting") and is_codex_model(self.running_models.get(lane)):
+            if not pipe and b and not b.get("compacting") and is_external_model(self.running_models.get(lane)):
                 self.midturn.setdefault(lane, []).append((content, kind, content if raw is None else raw))
                 return True   # Codex reads it with its next tool result (with_midturn)
             if not pipe or (b or {}).get("compacting"):
@@ -2474,7 +2505,7 @@ class Room:
         if not which.isdigit() or not 1 <= int(which) <= len(mine):
             return False, "which one? /reminders lists them, then /remind cancel N"
         r = mine[int(which) - 1]
-        if name not in (r["by"], self.cfg["host"]) and r["by"] not in ("Claude", "Codex"):
+        if name not in (r["by"], self.cfg["host"]) and r["by"] not in ("Claude", "Codex", "Gemini"):
             return False, f"only {r['by']} (or the host) can cancel that one"
         with self.notes_lock:
             self.notes["reminders"] = [x for x in self.notes["reminders"] if x["id"] != r["id"]]
@@ -2589,7 +2620,7 @@ class Room:
             if not p:
                 return False, "that poll is gone"
             if close:
-                if who not in (p["by"], self.cfg["host"]) and p["by"] not in ("Claude", "Codex"):
+                if who not in (p["by"], self.cfg["host"]) and p["by"] not in ("Claude", "Codex", "Gemini"):
                     return False, "only whoever started the poll (or the host) can close it"
                 p["closed"] = True
             else:
@@ -2711,6 +2742,8 @@ class Room:
         return p.get("model") or self.cfg.get("model") or "", p.get("effort") or self.cfg.get("effort") or ""
 
     def efforts_for(self, model):
+        if is_gemini_model(model):
+            return tuple(GEMINI_MODELS[gemini_model_id(model)]["efforts"])
         if is_codex_model(model):
             info = CODEX_MODELS.get(codex_model_id(model), {})
             return tuple(e["reasoningEffort"] for e in info.get("supportedReasoningEfforts", []))
@@ -2720,14 +2753,13 @@ class Room:
         rows = []
         for key, mid in MODELS.items():
             codex = is_codex_model(mid)
-            if codex and not (self.cfg.get("codex_bridge") or {}).get("url"):
-                continue   # no Codex bridge in room.json: only Claude is offered
             info = CODEX_MODELS.get(codex_model_id(mid), {}) if codex else {}
-            rows.append({"key": key, "id": mid, "provider": "codex" if codex else "claude",
+            gemini = GEMINI_MODELS.get(gemini_model_id(mid), {}) if is_gemini_model(mid) else {}
+            rows.append({"key": key, "id": mid, "provider": "gemini" if is_gemini_model(mid) else "codex" if codex else "claude",
                          "label": info.get("displayName") if codex else model_label(mid) if mid else "Default",
-                         "desc": info.get("description", MODEL_INFO.get(key, "")),
+                         "desc": gemini.get("description") or info.get("description", MODEL_INFO.get(key, "")),
                          "efforts": list(self.efforts_for(mid)),
-                         "default_effort": info.get("defaultReasoningEffort", ""),
+                         "default_effort": gemini.get("default_effort") or info.get("defaultReasoningEffort", ""),
                          "default_model": CODEX_DEFAULT_MODEL if mid == "codex" else ""})
         return rows
 
@@ -2814,7 +2846,7 @@ class Room:
             model, effort = self.pref(lane)
             model = self.running_models.get(lane, model)
             q.put({"t": "batch", "names": [lane], "lane": lane, "aid": aid, "secs": secs, "replay": True,
-                   "model": model_label(model) if model else "", "effort": effort, "assistant": "Codex" if is_codex_model(model) else "Claude"})
+                   "model": model_label(model) if model else "", "effort": effort, "assistant": assistant_name(model)})
             q.put({"t": "live", "lane": lane, "parts": json.loads(json.dumps(self.live_parts.get(lane, []))), "replay": True})
             for pin in pins_by.get(aid, []):
                 q.put({"t": "pin", "op": "add", "pin": pin, "replay": True})
@@ -3054,8 +3086,15 @@ class Room:
             self.set_lane_meta(lane, goal=clip(text, 400), goal_auto=True)
             self.broadcast({"t": "lane_meta", "meta": self.lane_meta_all()})
         joined = self.inject(lane, f"[{name}] (added while you work): {said}{refs}", raw=said + refs)
+        cut = {}
+        if joined:   # where the answer stands now: the page shows what Claude says next under this message
+            with self.lock:
+                parts_now = self.live_parts.get(lane)
+                if parts_now is not None and self.current_aid.get(lane):
+                    cut = {"aid": self.current_aid[lane], "at": len(parts_now)}
+                    parts_now.append(["text", ""])   # the next words start a new part
         self.broadcast({"t": "msg", "from": name, "text": text, "ts": time.time(), "lane": lane, **({"joined": True} if joined else {}),
-                        **({"files": attached} if attached else {})}, keep=True)
+                        **cut, **({"files": attached} if attached else {})}, keep=True)
         if joined:   # it went straight into the task running in this thread
             with self.lock:
                 self.injected.setdefault(lane, []).append(said)
@@ -3095,6 +3134,16 @@ class Room:
             self.broadcast({"t": "sys", "text": (f"{self.lane_label(target)} is back to the room's AI" if off else
                             f"🛠 {self.lane_label(target)} is now a control thread: the host's Claude Code answers here (/operator off undoes it)")},
                            keep=True)
+        elif cmd == "/compact_at":   # the host changes when long threads are compacted (tokens; 0 = never)
+            words = text.split()
+            if name != self.cfg["host"]:
+                self.send_to(name, {"t": "sys", "text": f"only {self.cfg['host']} (the host) can change that"})
+            elif len(words) < 2 or not words[1].isdigit():
+                self.send_to(name, {"t": "sys", "text": f"threads compact above {self.cfg.get('compact_at') or 0} tokens · /compact_at 120000"})
+            else:
+                self.cfg["compact_at"] = int(words[1])
+                save_json(CONFIG, self.cfg)
+                self.broadcast({"t": "sys", "text": f"{name}: long threads now compact above {int(words[1]):,} tokens"}, keep=True)
         elif cmd == "/unsend":   # take back your last message in this thread (Claude drops it too)
             target = lane or name
             with self.history_lock:
@@ -3159,7 +3208,7 @@ class Room:
             self.broadcast({"t": "sys", "text": f"🎨 {name} is making a picture: {clip(prompt, 120)}"})
 
             def work():
-                ok, msg = self.generate_image(name, prompt, "wide" if " wide" in f" {prompt.lower()}" else "square")
+                ok, msg = self.generate_image(name, prompt, "wide" if " wide" in f" {prompt.lower()}" else "square", lane=lane or name)
                 if not ok:
                     self.send_to(name, {"t": "sys", "text": msg})
             threading.Thread(target=work, daemon=True).start()
@@ -3186,6 +3235,9 @@ class Room:
             self.broadcast({"t": "sys", "text": self.pcs_line().replace("[room] PCs: ", "online: ")})
         elif cmd == "/compact":   # this thread's conversation, now ("/compact keep X" adds what to keep)
             target, how = lane or name, text[len("/compact"):].strip()
+            if is_gemini_model(self.turn_pref(target)[0]):
+                self.send_to(name, {"t": "sys", "text": "Gemini keeps its own bounded conversation context. Earlier room messages remain available through conversation_read; Claude and Codex sessions are kept separately."})
+                return True
             if is_codex_model(self.turn_pref(target)[0]):
                 self.send_to(name, {"t": "sys", "text": "Codex manages its own context automatically. Claude history is kept separately."})
                 return True
@@ -3319,15 +3371,16 @@ class Room:
         t0 = time.time()
         aid = "a" + secrets.token_hex(4)
         self.current_aid[lane] = aid
-        is_codex = is_codex_model(self.turn_pref(lane)[0])
+        is_external = is_external_model(self.turn_pref(lane)[0])
+        assistant = assistant_name(self.turn_pref(lane)[0])
         self.running_models[lane] = self.turn_pref(lane)[0]
         self.feed_seen[lane] = time.time()   # its prompt says what the others did so far
         try:
             model, effort = self.turn_pref(lane)
             self.broadcast({"t": "batch", "names": [lane], "lane": lane, "aid": aid,
                             "model": model_label(model) if model else "", "effort": effort, "auto": self.pref(lane)[1] == "auto",
-                            "assistant": "Codex" if is_codex else "Claude"})
-            if not is_codex and self.too_big(lane):
+                            "assistant": assistant})
+            if not is_external and self.too_big(lane):
                 self.broadcast({"t": "status", "text": "compacting the conversation first", "lane": lane})
                 if self.compact_lane(lane) == "stopped":
                     return
@@ -3344,9 +3397,10 @@ class Room:
                 asked = texts + self.injected.pop(lane, [])
             if parts:
                 self.record({"t": "answer", "parts": parts, "lane": lane, "asked": asked, "id": aid, "secs": round(time.time() - t0),
-                             "stopped": lane in self.halted, "assistant": "Codex" if is_codex else "Claude"})
-                if lane not in self.halted:
-                    self.mark_done(lane, asked, aid, "Codex" if is_codex else "Claude")
+                             "stopped": lane in self.halted, "assistant": assistant})
+                if lane not in self.halted and not (is_gemini_model(self.running_models.get(lane)) and
+                        self.state['lanes'].get(lane, {}).get('gemini_failed')):
+                    self.mark_done(lane, asked, aid, assistant)
                     self.report_to_parent(lane, parts)
         finally:
             self.usage_kick.set()
@@ -3362,12 +3416,12 @@ class Room:
             with self.lock:
                 self.turn_effort.pop(lane, None)
             self.set_lane_meta(lane, dirty=True)
-            self.broadcast({"t": "done", "lane": lane, "secs": round(time.time() - t0), "asked": texts, "stopped": lane in self.halted, "assistant": "Codex" if is_codex else "Claude"})
+            self.broadcast({"t": "done", "lane": lane, "secs": round(time.time() - t0), "asked": texts, "stopped": lane in self.halted, "assistant": assistant})
             try:
                 with self.lock:
                     halted = lane in self.halted
                     self.halted.discard(lane)
-                if not is_codex and not halted and self.too_big(lane):   # the lane stays busy meanwhile: new messages wait for the summary
+                if not is_external and not halted and self.too_big(lane):   # the lane stays busy meanwhile: new messages wait for the summary
                     with self.lock:
                         if lane in self.busy:
                             self.busy[lane]["compacting"] = True
@@ -3387,20 +3441,20 @@ class Room:
             seen["seen"] = time.time()
             save_json(STATE, self.state)
         lines = [self.pcs_line()]
-        if not is_codex_model(self.running_models.get(lane)):
+        if not is_external_model(self.running_models.get(lane)):
             with self.state_lock:
                 claude_seen = self.state["lanes"].get(lane, {}).get("claude_seen", 0)
             exchanges = []
             for ev in list(self.history):
                 if (ev.get("t") == "answer" and ev.get("lane") == lane
-                        and ev.get("assistant") == "Codex" and ev.get("ts", 0) > claude_seen):
-                    exchanges.append({"asked": ev.get("asked", []), "Codex":
+                        and ev.get("assistant") in ("Codex", "Gemini") and ev.get("ts", 0) > claude_seen):
+                    exchanges.append({"asked": ev.get("asked", []), ev.get("assistant"):
                         "".join(p[1] for p in ev.get("parts", []) if p[0] == "text")[:4000]})
             if exchanges:
-                lines.append("[room] Recent Codex exchanges in this thread (context only, already handled): "
+                lines.append("[room] Recent exchanges with other assistants in this thread (context only, already handled): "
                              + json.dumps(exchanges[-8:], ensure_ascii=False))
         high = [l for l in (self.usage or {}).get("limits", []) if l["percent"] >= USAGE_WARN[0]]
-        if high and not is_codex_model(self.running_models.get(lane)):
+        if high and not is_external_model(self.running_models.get(lane)):
             lines.append(f"[room] {self.cfg['host']}'s Claude plan is running low ("
                          + ", ".join(f"{l['label'][:1].lower() + l['label'][1:]} {l['percent']}% used, resets {until_text(l['resets'])}" for l in high)
                          + "): keep turns lean, and say so before starting a big job.")
@@ -3417,7 +3471,7 @@ class Room:
         if others:
             lines.append("[room] other threads are handling these right now (NOT for you, don't answer or do them): "
                          + "; ".join(others))
-        new_pins = [p for p in self.pins_view() if p["ts"] > since and p["by"] not in ("Claude", "Codex")]
+        new_pins = [p for p in self.pins_view() if p["ts"] > since and p["by"] not in ("Claude", "Codex", "Gemini")]
         if new_pins:
             lines.append("[room] pinned onto chat messages since your last turn:")
             lines += [f"  {p['by']} pinned {self.pin_text(p)} onto {self.target_text(p['target'])}" for p in new_pins[-15:]]
@@ -3528,7 +3582,7 @@ class Room:
             return text
         with self.lock:
             own = list(self.exec_tokens)
-        for secret in [*self.cfg["people"].values(), self.cfg.get("dev_token", ""), (self.cfg.get("codex_bridge") or {}).get("key", ""), *own, *self.secret_values()]:
+        for secret in [*self.cfg["people"].values(), self.cfg.get("dev_token", ""), (self.cfg.get("codex_bridge") or {}).get("key", ""), (self.cfg.get("gemini_bridge") or {}).get("key", ""), *own, *self.secret_values()]:
             if secret and len(secret) >= 12:
                 text = text.replace(secret, "[hidden]")
         return SECRET_RE.sub("[hidden key]", text)
@@ -3863,7 +3917,15 @@ class Room:
         return "\n".join(f"[{f['id']}] {f['name']} ({human_size(f['size'])}, from {f['by']}, "
                          f"{time.strftime('%d.%m %H:%M', time.localtime(f['ts']))})" for f in files)
 
-    def add_file(self, who, name, stream, length, caption="", announce=True, attach=True):
+    def upload_lane(self, who):
+        """The thread whose running file_put sent this upload (chat.py doesn't say which), else None."""
+        for entry in list(self.execs.values()):
+            if (entry["user"] == who and (entry.get("msg") or {}).get("tool") == "file_put" and entry["started"].is_set()
+                    and not entry["done"].is_set()):
+                return entry["lane"]
+        return None
+
+    def add_file(self, who, name, stream, length, caption="", announce=True, attach=True, lane=None):
         """Store an upload streamed from the request body; returns (ok, message)."""
         name = os.path.basename(str(name).replace("\\", "/")).strip()[:200] or "file"
         if length > MAX_FILE:
@@ -3896,7 +3958,7 @@ class Room:
             pass
         elif is_image:   # pictures show up in the chat itself
             self.broadcast({"t": "image", "from": who, "file_id": file_id, "name": name, "caption": caption,
-                            "size": length, "preview": image_preview(path)}, keep=True)
+                            "size": length, "preview": image_preview(path), **({"lane": lane} if lane else {})}, keep=True)
         else:
             self.broadcast({"t": "sys", "text": f"📎 {who} shared {name} ({human_size(length)}): Files tab, "
                                                 f"or /get {file_id} in chat.py"}, keep=True)
@@ -3905,7 +3967,7 @@ class Room:
                 self.attachments.setdefault(who, []).append({"id": file_id, "name": name, "image": is_image})
         return True, f"shared as {file_id}"
 
-    def generate_image(self, who, prompt, aspect="square", source_id=""):
+    def generate_image(self, who, prompt, aspect="square", source_id="", lane=None):
         """Make a picture and post it in the chat: Gemini ("nano banana") with a key, else Pollinations."""
         prompt = clean_text(prompt, 2000)
         if not prompt:
@@ -3929,7 +3991,7 @@ class Room:
         except Exception as e:  # noqa: BLE001
             return False, f"picture failed: {e}"
         name = (re.sub(r"[^\w-]+", "-", prompt.lower())[:40].strip("-") or "picture") + ext
-        ok, msg = self.add_file(who, name, io.BytesIO(data), len(data), caption=prompt)
+        ok, msg = self.add_file(who, name, io.BytesIO(data), len(data), caption=prompt, lane=lane)
         return ok, f"posted in the chat and in Files ({msg}, made with {'Gemini' if key else 'Pollinations'})"
 
     def file_view(self, file_id):
@@ -4775,7 +4837,7 @@ class Room:
             self.broadcast({"t": "sys", "text": f"📝 {who} saved the meeting “{title}” (Meetings tab)", "meeting": mid}, keep=True)
 
     def room_tool(self, lane, tool, args):
-        who = "Codex" if is_codex_model(self.running_models.get(lane)) else "Claude"
+        who = assistant_name(self.running_models.get(lane))
         if tool == "conversation_read":
             from codex_provider import conversation_read
             return conversation_read(self, lane, args)
@@ -4794,7 +4856,7 @@ class Room:
             return ok, msg, None
         if tool == "image_generate":
             ok, msg = self.generate_image(who, args.get("prompt", ""), args.get("aspect", "square"),
-                                          str(args.get("edit_file_id") or ""))
+                                          str(args.get("edit_file_id") or ""), lane=lane)
             return ok, msg, None
         if tool == "room_feedback":
             ok, msg = self.feedback_add(lane, args)
@@ -5069,6 +5131,9 @@ class Room:
         with self.lock:
             self.exec_tokens[token] = lane
         try:
+            if is_gemini_model(self.running_models.get(lane, self.turn_pref(lane)[0])):
+                from gemini_provider import ask_gemini
+                return ask_gemini(self, lane, prompt, token)
             if is_codex_model(self.running_models.get(lane, self.turn_pref(lane)[0])):
                 from codex_provider import ask_codex
                 return ask_codex(self, lane, prompt, token)
@@ -5962,9 +6027,11 @@ def make_handler(room):
                     return
                 query = parse_qs(urlparse(self.path).query)
                 filename = query.get("name", ["file"])[0]
+                thread = query.get("thread", [""])[0]
                 ok, msg = room.add_file(name, filename, self.rfile, int(self.headers.get("Content-Length") or 0),
                                         announce=query.get("quiet") != ["1"] and query.get("stage") != ["1"],
-                                        attach=query.get("stage") != ["1"])
+                                        attach=query.get("stage") != ["1"],
+                                        lane=room.lane_of(name, thread) if thread else room.upload_lane(name))
                 self.send_json({"ok": ok, "message": msg}, 200 if ok else 400)
                 return
             if path == "/dev_reply":   # the room's developer answering a request (dev.py)

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="room-version" content="54">
+<meta name="room-version" content="59">
 <title>Claude Room</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23f3a07a%22/%3E%3Cstop%20offset%3D%22.55%22%20stop-color%3D%22%23e07a4c%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23c75f34%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20transform%3D%22translate%284%204%29%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%2020.5V10a6%206%200%200%201%2012%200v10.5M3.5%2020.5h17%22/%3E%3Cpath%20d%3D%22M12%209.2l.95%202.35%202.35.95-2.35.95L12%2015.8l-.95-2.35-2.35-.95%202.35-.95z%22%20fill%3D%22%23fff%22%20stroke-width%3D%221%22/%3E%3C/g%3E%3C/svg%3E">
 <script>try { const s = JSON.parse(localStorage.getItem("room-settings") || "{}"); if (s.theme) document.documentElement.dataset.theme = s.theme; if (s.accent) document.documentElement.dataset.accent = s.accent; } catch {}</script>
@@ -152,6 +152,19 @@
   .msg.answer .mbody::before { content:""; position:absolute; left:14px; right:14px; top:-1px; height:1px;
                                background:linear-gradient(90deg, transparent, rgba(244,169,131,.55), transparent); }
   .msg.answer .who { color:var(--accent-2); }
+  /* people's messages: easy to tell from the AI's answers, even scrolling fast */
+  .msg.human { margin-top:14px; }
+  .msg.human.cont { margin-top:2px; }
+  .msg.human .mbody { background:color-mix(in srgb, var(--pc, #8ab4ff) 10%, transparent); border-left:3px solid var(--pc, #8ab4ff);
+                      border-radius:4px 12px 12px 4px; padding:7px 14px 9px; }
+  .msg.human .mhead .who::before { content:"❯ "; opacity:.85; }
+  .msg.human .mtext { font-size:15px; font-weight:520; }
+  .msg.human.flash .mbody { box-shadow:0 0 0 2px var(--pc, #8ab4ff); }
+  #promptRail { position:absolute; right:3px; width:12px; z-index:5; pointer-events:none; }
+  #promptRail i { position:absolute; left:1px; width:11px; height:5px; border-radius:2px; background:var(--pc, #8ab4ff); opacity:.85;
+                  pointer-events:auto; cursor:pointer; box-shadow:0 0 0 1px rgba(0,0,0,.35); }
+  #promptRail i:hover { opacity:1; transform:scaleX(1.6); transform-origin:right; }
+  #promptRail b { position:absolute; left:0; width:10px; border-radius:3px; background:rgba(255,255,255,.07); border:1px solid rgba(255,255,255,.12); }
   .live-dots { display:none; gap:3px; margin-left:2px; }
   .msg.answer.live .live-dots { display:inline-flex; }
   .live-dots i { width:4px; height:4px; border-radius:50%; background:var(--accent); animation: blink 1.2s infinite; }
@@ -1166,6 +1179,29 @@
   .tlchips .chip i { font-style:normal; color:var(--kc); }
   .tlchips .chip b { font-weight:600; color:var(--text-3); font-size:11.5px; }
   .tline { position:relative; width:100%; max-width:980px; margin:0 auto; padding:4px 22px 48px; box-sizing:border-box; }
+  /* chapters: contents on the left, folding chapters on the right */
+  .tlbody { display:flex; gap:18px; align-items:flex-start; max-width:1260px; margin:0 auto; padding:0 22px; box-sizing:border-box; width:100%; }
+  .tlbody .tline { max-width:none; margin:0; padding:4px 0 48px; flex:1; min-width:0; }
+  .tltoc { position:sticky; top:8px; flex:0 0 230px; max-height:calc(100vh - 210px); overflow-y:auto; padding:8px; margin-top:10px;
+           border:1px solid var(--border); border-radius:12px; background:var(--surface); box-sizing:border-box; }
+  .tltoc .tthead { display:flex; gap:6px; padding:2px 4px 8px; font-size:11.5px; color:var(--text-3); }
+  .tltoc .tthead button { background:none; border:0; color:var(--text-3); cursor:pointer; padding:0; font:inherit; }
+  .tltoc .tthead button:hover { color:var(--text); }
+  .tltoc a { display:flex; justify-content:space-between; align-items:baseline; gap:8px; padding:6px 8px; border-radius:8px;
+             color:var(--text-2); font-size:12.5px; cursor:pointer; text-decoration:none; }
+  .tltoc a:hover, .tltoc a.on { background:var(--surface-3); color:var(--text); }
+  .tltoc a small { color:var(--text-3); font-size:11px; white-space:nowrap; }
+  @media (max-width: 900px) { .tltoc { display:none; } .tlbody { padding:0; } }
+  .tlchap { cursor:pointer; user-select:none; }
+  .tlchap .chev { color:var(--text-3); font-size:11px; width:10px; }
+  .tlchap .tlcnt { margin-left:auto; display:flex; gap:8px; }
+  .tlchap .tlcnt i { font-style:normal; font-size:12px; color:var(--kc); }
+  .tlchap.closed b { color:var(--text-2); }
+  .tline.compact .tltext, .tline.compact .tlpics, .tline.compact .tlatt, .tline.compact .tlmore, .tline.compact .tlsrc { display:none; }
+  .tline.compact .tlbox { padding-top:6px; padding-bottom:6px; }
+  .tlseg { display:inline-flex; border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+  .tlseg button { background:none; border:0; color:var(--text-2); padding:6px 11px; font:inherit; font-size:12.5px; cursor:pointer; }
+  .tlseg button.on { background:var(--surface-3); color:var(--text); }
   .tline::before { content:""; position:absolute; left:37px; top:12px; bottom:36px; width:2px; border-radius:2px;
                 background:linear-gradient(180deg, transparent, var(--border-2) 36px, var(--border-2) calc(100% - 36px), transparent); }
   .tline:has(.tlempty)::before { display:none; }
@@ -1652,11 +1688,13 @@
 <section id="timeline">
   <div class="tlhead"><span class="bicon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5.5" r="2.5"/><circle cx="6" cy="18.5" r="2.5"/><path d="M6 8v8"/><path d="M11 5.5h9M11 12h6M11 18.5h9"/></svg></span>
     <div><h2>Timeline</h2><small id="tlSub">The project's story, with pictures</small></div><span class="spacer"></span>
+    <div class="tlseg" id="tlGroup" role="group" aria-label="Chapters"><button data-tlg="day" title="A chapter per day">By day</button><button data-tlg="thread" title="A chapter per thread: where it happened">By thread</button></div>
+    <button class="btn" id="tlDense" title="One line per moment">Compact</button>
     <button class="btn" id="tlOrder" title="Change the order">↓ Oldest first</button>
     <button class="btn primary" id="tlNew"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New moment</button></div>
   <div class="tlchips" id="tlChips"></div>
   <div class="tlform" id="tlForm"></div>
-  <div class="tline" id="tlList"></div>
+  <div class="tlbody"><nav class="tltoc" id="tlToc"></nav><div class="tline" id="tlList"></div></div>
 </section>
 
 <section id="threads">
@@ -1782,7 +1820,7 @@ let answers = {};    // person -> {el, parts}: the answers streaming right now
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const col = n => `var(--${colors[n] || "fg"})`;
 const name = n => `<span class="who" style="color:${col(n)}">${esc(n)}</span>`;
-const avatar = n => n === "Codex" ? `<span class="avatar ai" title="Codex" style="background:#75d6c0;color:#102d27;font-weight:800">C</span>` : n === "claude" || n === "Claude"
+const avatar = n => n === "Gemini" ? `<span class="avatar ai" title="Gemini" style="background:#9cc4ff;color:#16305e;font-weight:800">G</span>` : n === "Codex" ? `<span class="avatar ai" title="Codex" style="background:#75d6c0;color:#102d27;font-weight:800">C</span>` : n === "claude" || n === "Claude"
   ? `<span class="avatar ai" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="#1c0f07" stroke-width="3" stroke-linecap="round"><path d="M12 3v18M4.2 7.5l15.6 9M4.2 16.5l15.6-9"/></svg></span>`
   : `<span class="avatar" style="background:${col(n)}" title="${esc(n)}">${esc((n || "?")[0])}</span>`;
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } },
@@ -1843,7 +1881,7 @@ function add(html, cls) {
 }
 const hhmm = ts => { const d = ts ? new Date(ts * 1000) : new Date(); return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); };
 function msgHtml(who, inner, ts, extra = "") {
-  const label = ["Claude", "Codex"].includes(who) ? `<span class="who">${esc(who)}</span>` : name(who);
+  const label = ["Claude", "Codex", "Gemini"].includes(who) ? `<span class="who">${esc(who)}</span>` : name(who);
   return `<div class="mav">${avatar(who)}</div><div class="mbody"><div class="mhead">${label}${extra}<time>${hhmm(ts)}</time></div>${inner}</div>`;
 }
 // light markdown for messages: `code`, **bold** / *bold*, [links](https://…), - lists, ``` blocks
@@ -1922,6 +1960,7 @@ function rememberScroll() {
 }
 function applyThreadFilter() {
   for (const el of log.children) el.classList.toggle("tfhide", threadOnly && !(el.dataset.lane !== undefined && laneShown(el.dataset.lane)));
+  document.dispatchEvent(new Event("railchange"));   // the prompt rail redraws at once
   const s = threadOnly && tScroll[curThread || me], el = s && msgEl(s.id);
   if (el && !el.classList.contains("tfhide")) log.scrollTop += el.getBoundingClientRect().top - log.getBoundingClientRect().top - s.off;
   else log.scrollTop = log.scrollHeight;
@@ -2140,9 +2179,47 @@ function startAnswer(lane, id, ts, assistant = "Claude") {
                            ts, to + `<span class="live-dots"><i></i><i></i><i></i></span>` + stop), "msg answer");
   anchor(wrap, id, assistant);
   laneEl(wrap, lane);
-  return { el: wrap.querySelector(".body"), head: wrap, wrap, spin: wrap.querySelector(".spin"), parts: [] };
+  return { el: wrap.querySelector(".body"), head: wrap, wrap, spin: wrap.querySelector(".spin"), parts: [], assistant };
 }
 const laneAnswer = (lane, id, assistant) => answers[lane] || (answers[lane] = startAnswer(lane, id, undefined, assistant));
+// A message that joins a running answer cuts it: the part so far stays above the message, the rest goes below
+// (like Claude Code). Earlier pieces lose the id (pins, reactions, footer stay on the last piece).
+function sealPiece(a) {
+  a.wrap.classList.remove("live");
+  for (const sel of [".spin", ".live-dots", ".stopbtn", ".hacts", ".pins"]) { const x = a.wrap.querySelector(sel); if (x) x.remove(); }
+  delete a.wrap.dataset.id;
+  a.wrap.classList.remove("pinnable");
+  a.wrap.classList.add("piece");
+  renderAnswer(a, true);
+}
+function splitLive(lane, msgDiv, aid) {
+  const a = answers[lane];
+  if (!a || replaying) return;
+  sealPiece(a);
+  const nw = startAnswer(lane, aid || a.wrap.dataset.id, undefined, a.assistant);
+  nw.wrap.classList.add("live");
+  nw.prev = a;
+  answers[lane] = nw;
+}
+// The parts of a finished or replayed answer, drawn in pieces around the messages that joined it (data-aid / data-at).
+function placePieces(lane, aid, parts, assistant, last) {
+  const joined = [...log.querySelectorAll(`.msg[data-aid="${CSS.escape(aid)}"]`)].filter(m => m.dataset.at !== undefined);
+  let from = 0, prev = null;
+  for (const m of joined) {
+    const at = Math.max(from, Math.min(parts.length, +m.dataset.at || 0));
+    const seg = parts.slice(from, at);
+    from = at;
+    if (!seg.some(p => p[0] === "tool" || (p[1] || "").trim())) continue;
+    const piece = startAnswer(lane, undefined, undefined, assistant);
+    piece.parts = seg; piece.prev = prev;
+    m.parentNode.insertBefore(piece.wrap, m);
+    sealPiece(piece);
+    prev = piece;
+  }
+  last.prev = prev;
+  return parts.slice(from);
+}
+const allParts = a => a ? [...allParts(a.prev), ...a.parts] : [];
 // every message can carry pins: notes, board cards, pictures/files, sketches
 function anchor(div, id, author, text) {
   if (!id || !div) return;
@@ -2155,6 +2232,59 @@ function anchor(div, id, author, text) {
   div.insertAdjacentHTML("beforeend", `<div class="pins"></div><div class="hacts"><button class="hbtn" data-react-pick title="React">${ICON_SMILE}</button><button class="hbtn" data-star title="Save it (★ Saved)">${ICON_STAR}</button>${edit}${copy}${del}<button class="pinbtn" title="Pin a note, card, picture or sketch here">📌</button></div>`);
 }
 const laneBusy = lane => busy[lane] || (busy[lane] = { since: Date.now(), note: "" });
+// ---- the prompt rail: every person's message as a mark on the chat's right edge (click jumps there); Alt+↑ / Alt+↓
+const rail = document.createElement("div");
+rail.id = "promptRail";
+log.after(rail);
+let railDirty = true;
+const posIn = el => el.getBoundingClientRect().top - log.getBoundingClientRect().top + log.scrollTop;   // where it sits in the chat
+function drawRail() {
+  if (!railDirty && !rail._scroll) return;
+  const total = log.scrollHeight || 1, h = log.clientHeight;
+  rail.style.top = log.offsetTop + "px";
+  rail.style.height = h + "px";
+  if (railDirty) {
+    railDirty = false;
+    const marks = [];
+    for (const el of log.querySelectorAll(".msg.human:not(.tfhide)")) {
+      const top = posIn(el) / total * h;
+      const tip = (el.querySelector(".who") || {}).textContent + ": " + (el._text || "").replace(/\s+/g, " ").slice(0, 90);
+      marks.push(`<i style="top:${top.toFixed(1)}px;--pc:${el.style.getPropertyValue("--pc")}" data-jump="${esc(el.dataset.id || "")}" title="${esc(tip)}"></i>`);
+    }
+    rail.innerHTML = `<b></b>` + marks.join("");
+  }
+  const view = rail.querySelector("b");
+  if (view) { view.style.top = (log.scrollTop / total * h) + "px"; view.style.height = Math.max(6, h * h / total) + "px"; }
+  rail._scroll = false;
+}
+const railSoon = () => { railDirty = true; requestAnimationFrame(drawRail); };
+new MutationObserver(railSoon).observe(log, { childList: true });
+document.addEventListener("railchange", railSoon);
+log.addEventListener("scroll", () => { rail._scroll = true; }, { passive: true });
+addEventListener("resize", () => { railDirty = true; });
+setInterval(drawRail, 400);
+let lastJump = null;
+function flashPrompt(el) {
+  lastJump = el;
+  el.scrollIntoView({ block: "center", behavior: "smooth" });
+  el.classList.add("flash");
+  setTimeout(() => el.classList.remove("flash"), 1400);
+}
+rail.addEventListener("click", e => {
+  const m = e.target.closest("[data-jump]");
+  const el = m && m.dataset.jump && log.querySelector(`.msg[data-id="${CSS.escape(m.dataset.jump)}"]`);
+  if (el) flashPrompt(el);
+});
+addEventListener("keydown", e => {
+  if (!e.altKey || (e.key !== "ArrowUp" && e.key !== "ArrowDown")) return;
+  const mid = log.scrollTop + log.clientHeight / 2;
+  const all = [...log.querySelectorAll(".msg.human:not(.tfhide)")];
+  const seen = lastJump && lastJump.isConnected && !lastJump.classList.contains("tfhide") && Math.abs(posIn(lastJump) - mid) < log.clientHeight / 2;
+  const ref = seen ? posIn(lastJump) : mid;   // from the message you jumped to last, else from the middle of the screen
+  const el = e.key === "ArrowUp" ? all.filter(x => posIn(x) < ref - 5).pop() : all.find(x => posIn(x) > ref + 5);
+  e.preventDefault(); e.stopPropagation();
+  if (el) flashPrompt(el);
+}, true);
 
 function handle(ev) {
   switch (ev.t) {
@@ -2218,6 +2348,10 @@ function handle(ev) {
         "msg" + (cont ? " cont" : ""));
       anchor(div, ev.id, ev.from, ev.text);
       laneEl(div, lane);
+      div.classList.add("human");
+      div.style.setProperty("--pc", col(ev.from));
+      if (ev.joined && ev.aid) { div.dataset.aid = ev.aid; div.dataset.at = ev.at || 0; }
+      if (ev.joined && !replaying) splitLive(lane, div, ev.aid);
       if (!ev.replay && ev.from !== me) { chimeFor("message"); maybeGlitch(div); }
       lastAuthor = { who: ev.from, ts: ev.ts || 0, lane };
       if (!ev.replay) { chatActivity(); if (ev.from !== me && new RegExp(`(^|\\W)@?${me}(\\W|$)`, "i").test(ev.text)) {
@@ -2227,13 +2361,13 @@ function handle(ev) {
     case "image": addImage(ev); if (!ev.replay) { chatActivity();
       if (ev.from !== me) { const id = ev.id; addNotif("file", `${ev.from === "Claude" ? "Claude made" : ev.from + " shared"} a picture`, ev.caption || ev.name, ["Show", () => jumpTo(id)], { toast: view !== "chat" }); } } break;
     case "batch": {
-      busy[ev.lane] = { since: Date.now() - (ev.secs || 0) * 1000, note: "" };
+      busy[ev.lane] = { since: Date.now() - (ev.secs || 0) * 1000, note: "", assistant: ev.assistant || "Claude" };
       const a = laneAnswer(ev.lane, ev.aid, ev.assistant || "Claude");
       a.wrap.classList.add("live");
       if (ev.model) a.wrap.querySelector(".mhead time").insertAdjacentHTML("beforebegin", `<span class="mtag">${esc(ev.model)}${ev.effort ? " · " + (ev.auto ? "auto " : "") + esc(EFFORT_LABEL[ev.effort] || ev.effort) : ""}</span>`);
       break;
     }
-    case "live": { const a = laneAnswer(ev.lane); a.parts = ev.parts || []; renderAnswer(a); break; }   // a turn that was running when the page opened
+    case "live": { const a = laneAnswer(ev.lane); const aid = a.wrap.dataset.id; a.parts = aid ? placePieces(ev.lane, aid, ev.parts || [], a.assistant, a) : (ev.parts || []); if (aid) log.appendChild(a.wrap); renderAnswer(a); break; }   // a turn that was running when the page opened
     case "delta": {
       laneBusy(ev.lane).note = "";
       const answer = laneAnswer(ev.lane);
@@ -2248,8 +2382,8 @@ function handle(ev) {
     }
     case "tool_done": {
       laneBusy(ev.lane).note = "";
-      const answer = answers[ev.lane];
-      const p = answer && answer.parts.find(x => x[0] === "tool" && x[3] === ev.tid);
+      let answer = answers[ev.lane], p = null;
+      for (let x = answer; x && !p; x = x.prev) { p = x.parts.find(y => y[0] === "tool" && y[3] === ev.tid); if (p) answer = x; }
       if (p) { p[4] = ev.ok; p[5] = ev.secs; p[6] = ev.preview || ""; }
       if (toolCache[ev.tid]) { delete toolCache[ev.tid]; if (openTools.has(ev.tid)) loadTool(ev.tid); }
       if (answer) renderAnswer(answer);
@@ -2267,10 +2401,13 @@ function handle(ev) {
                  aid ? ["Show", () => jumpTo(aid)] : null, { toast: document.hidden || took > 20 || view !== "chat", desktop: true });
       }
       if (answers[ev.lane]) { answers[ev.lane].wrap.classList.remove("live"); renderAnswer(answers[ev.lane], true); }
-      if (answers[ev.lane]) answerFoot(answers[ev.lane].wrap, { parts: answers[ev.lane].parts, secs: ev.secs, asked: ev.asked, lane: ev.lane, stopped: ev.stopped });
-      if (answers[ev.lane] && !answers[ev.lane].parts.length) { answers[ev.lane].head.remove(); answers[ev.lane].wrap.remove(); }   // nothing came (an error)
+      if (answers[ev.lane]) answerFoot(answers[ev.lane].wrap, { parts: allParts(answers[ev.lane]), secs: ev.secs, asked: ev.asked, lane: ev.lane, stopped: ev.stopped });
+      if (answers[ev.lane] && !answers[ev.lane].parts.some(p => p[0] === "tool" || (p[1] || "").trim())) {   // nothing after the last message that joined (or an error)
+        const a = answers[ev.lane]; a.head.remove(); a.wrap.remove();
+        if (a.prev) { a.prev.wrap.classList.remove("piece"); answerFoot(a.prev.wrap, { parts: allParts(a.prev), secs: ev.secs, asked: ev.asked, lane: ev.lane, stopped: ev.stopped }); }
+      }
       delete busy[ev.lane]; delete answers[ev.lane]; chatActivity(); break;
-    case "answer": { const answer = startAnswer(ev.lane, ev.id, ev.ts, ev.assistant || "Claude"); answer.parts = ev.parts; renderAnswer(answer); answerFoot(answer.wrap, ev); break; }
+    case "answer": { const answer = startAnswer(ev.lane, ev.id, ev.ts, ev.assistant || "Claude"); answer.parts = placePieces(ev.lane, ev.id, ev.parts || [], ev.assistant || "Claude", answer); renderAnswer(answer); answerFoot(answer.wrap, ev); break; }
     case "pin": pinEvent(ev); break;
     case "del": {   // a message or answer was deleted
       const el = msgEl(ev.id);
@@ -2349,7 +2486,7 @@ function drawStatus() {
   if (me) drawThreads();
   statusEl.classList.toggle("busy", lanes.length > 0);
   const here = curThread || me, base = curThread ? `Message in # ${threadName(curThread)}` : "Message";
-  input.placeholder = busy[here] && !busy[here].compacting ? `${base} · Claude is working: it joins the task` : `${base} · / for commands`;
+  input.placeholder = busy[here] && !busy[here].compacting ? `${base} · ${busy[here].assistant || "Assistant"} is working: it joins the task` : `${base} · / for commands`;
 }
 setInterval(drawStatus, 500);
 
@@ -2367,6 +2504,7 @@ function addImage(ev) {
     ${ev.caption ? `<span class="cap">${esc(ev.caption)}</span>` : `<span class="cap">${esc(ev.name)}</span>`}</div>`, ev.ts,
     `<span class="to">${ev.from === "Claude" ? "made a picture" : "shared a picture"}</span>`), "msg");
   anchor(div, ev.id, ev.from);
+  laneEl(div, ev.lane || (ev.from && ev.from !== "Claude" ? ev.from : ""));
   const im = div.querySelector("img");
   if (im && replaying) im.addEventListener("load", () => { if (nearBottom()) log.scrollTop = log.scrollHeight; }, { once: true });
 }
@@ -3737,6 +3875,42 @@ const fmtDay = ts => new Date(ts * 1000).toLocaleDateString([], { weekday: "shor
 const fileAlive = id => !files.length || files.some(f => f.id === id);
 const tlAtt = id => { for (const e of timeline) { const a = e.att.find(x => x.id === id); if (a) return a; } return null; };
 const tlPics = e => e.att.filter(a => a.kind === "file" && a.image);
+// chapters: by day, or by the thread a moment came from (its source message's thread)
+let tlGroup = store.get("room-tl-group") || "day", tlCompact = store.get("room-tl-compact") === "1", tlOpen = {};
+try { tlOpen = JSON.parse(store.get("room-tl-open") || "{}"); } catch { tlOpen = {}; }
+function tlLaneOf(e) {   // the thread it came from: its source message, else the thread its card is pinned to, else the card's person
+  if (e.lane) return e.lane;
+  const m = e.src && msgEl(e.src);
+  if (m && m.dataset.lane) return m.dataset.lane;
+  if (e.from_card) {
+    for (const [l, meta] of Object.entries(laneMeta || {})) if ((meta.pins || []).some(p => p.kind === "card" && p.card === e.from_card)) return l;
+    const c = (typeof board !== "undefined" && board.cards || []).find(k => k.id === e.from_card);
+    if (c && c.who) return c.who;
+  }
+  return "";
+}
+const tlKey = e => tlGroup === "thread" ? "th:" + (tlLaneOf(e) || "other") : "day:" + dayKey(e.at);
+function tlChapters(shown, d0) {
+  const map = new Map();
+  for (const e of shown) {
+    const key = tlKey(e);
+    if (!map.has(key)) {
+      const l = tlLaneOf(e);
+      map.set(key, tlGroup === "thread"
+        ? { key, title: l ? (threadName(l) || "Main") : "Other", sub: l ? owner(l) : "", items: [], last: 0 }
+        : { key, title: `Day ${Math.round((dayStart(e.at) - d0) / 86400000) + 1}`, sub: fmtDay(e.at), items: [], last: 0 });
+    }
+    const c = map.get(key);
+    c.items.push(e);
+    c.last = Math.max(c.last, e.at);
+  }
+  const list = [...map.values()];
+  if (tlGroup === "thread") list.sort((a, b) => b.last - a.last);
+  else if (tlNewest) list.reverse();
+  if (tlNewest) list.forEach(c => c.items.reverse());
+  return list;
+}
+const saveTlOpen = () => store.set("room-tl-open", JSON.stringify(tlOpen));
 function renderTimeline() {
   const all = timeline, count = k => all.filter(e => e.kind === k).length;
   const pics = all.reduce((n, e) => n + tlPics(e).length, 0), last = all.length ? all[all.length - 1].at : 0;
@@ -3754,15 +3928,22 @@ function renderTimeline() {
     return;
   }
   const d0 = dayStart(all[0].at);
-  let html = "", lastDay = "";
-  for (const e of tlNewest ? [...shown].reverse() : shown) {
-    if (dayKey(e.at) !== lastDay) {
-      lastDay = dayKey(e.at);
-      html += `<div class="tlday"><b>Day ${Math.round((dayStart(e.at) - d0) / 86400000) + 1}</b><span>${fmtDay(e.at)}</span></div>`;
-    }
-    html += tlEntryHtml(e);
+  const chaps = tlChapters(shown, d0);
+  if (tlFlashId) { const f = shown.find(e => e.id === tlFlashId); if (f) tlOpen[tlKey(f)] = true; }
+  const ranked = [...chaps].sort((a, b) => b.last - a.last).map(c => c.key);
+  let html = "", toc = "";
+  for (const c of chaps) {
+    const open = c.key in tlOpen ? tlOpen[c.key] : (ranked.indexOf(c.key) < 2 || chaps.length <= 3);
+    const counts = Object.entries(TL_KIND).map(([k, m]) => { const n = c.items.filter(e => e.kind === k).length; return n ? `<i style="--kc:${m.c}" title="${m.label}">${m.ic} ${n}</i>` : ""; }).join("");
+    html += `<div class="tlday tlchap${open ? "" : " closed"}" data-chap="${esc(c.key)}"><span class="chev">${open ? "▾" : "▸"}</span><b>${esc(c.title)}</b><span>${esc(c.sub)}</span><span class="tlcnt">${counts}</span></div>`
+      + `<div class="tlgroup">${open ? c.items.map(e => tlEntryHtml(e)).join("") : ""}</div>`;
+    toc += `<a data-toc="${esc(c.key)}"><span>${esc(c.title)}${c.sub ? ` <small>${esc(c.sub)}</small>` : ""}</span><small>${c.items.length}</small></a>`;
   }
   tlList.innerHTML = html;
+  tlList.classList.toggle("compact", tlCompact);
+  document.getElementById("tlToc").innerHTML = `<div class="tthead"><button data-tlall="1">expand all</button>·<button data-tlall="0">collapse all</button></div>` + toc;
+  document.querySelectorAll("#tlGroup [data-tlg]").forEach(b => b.classList.toggle("on", b.dataset.tlg === tlGroup));
+  document.getElementById("tlDense").classList.toggle("on", tlCompact);
   tlList.querySelectorAll("canvas[data-sketch]").forEach(cv => { const a = tlAtt(cv.dataset.sketch); if (a) drawSketch(cv, a.sketch.strokes); });
   if (tlFlashId) {
     const el = tlList.querySelector(`[data-tl="${CSS.escape(tlFlashId)}"]`);
@@ -3852,6 +4033,28 @@ tlForm.addEventListener("keydown", ev => {
 });
 document.getElementById("tlChips").addEventListener("click", e => { const c = e.target.closest("[data-tlf]"); if (c) { tlFilter = c.dataset.tlf; renderTimeline(); } });
 document.getElementById("tlOrder").onclick = () => { tlNewest = !tlNewest; store.set("room-tl-order", tlNewest ? "new" : "old"); renderTimeline(); };
+tlList.addEventListener("click", e => {
+  const h = e.target.closest("[data-chap]");
+  if (!h) return;
+  const k = h.dataset.chap;
+  tlOpen[k] = h.classList.contains("closed");
+  saveTlOpen(); renderTimeline();
+});
+document.getElementById("tlToc").addEventListener("click", e => {
+  const all = e.target.closest("[data-tlall]");
+  if (all) { const open = all.dataset.tlall === "1"; tlList.querySelectorAll("[data-chap]").forEach(h => { tlOpen[h.dataset.chap] = open; }); saveTlOpen(); renderTimeline(); return; }
+  const a = e.target.closest("[data-toc]");
+  if (!a) return;
+  tlOpen[a.dataset.toc] = true; saveTlOpen(); renderTimeline();
+  const h = tlList.querySelector(`[data-chap="${CSS.escape(a.dataset.toc)}"]`);
+  if (h) h.scrollIntoView({ block: "start", behavior: "smooth" });
+  document.querySelectorAll("#tlToc a").forEach(x => x.classList.toggle("on", x === document.querySelector(`#tlToc [data-toc="${CSS.escape(a.dataset.toc)}"]`)));
+});
+document.getElementById("tlGroup").addEventListener("click", e => {
+  const b = e.target.closest("[data-tlg]");
+  if (b) { tlGroup = b.dataset.tlg; store.set("room-tl-group", tlGroup); renderTimeline(); }
+});
+document.getElementById("tlDense").onclick = () => { tlCompact = !tlCompact; store.set("room-tl-compact", tlCompact ? "1" : "0"); renderTimeline(); };
 document.getElementById("tlNew").onclick = () => openComposer();
 tlList.addEventListener("click", e => {
   const t = sel => e.target.closest(sel), ent = t(".tle"), entry = ent && timeline.find(x => x.id === ent.dataset.tl);
@@ -3992,7 +4195,7 @@ document.getElementById("usagePanel").addEventListener("click", e => {
 // =================================================================== model + effort (each person's own)
 let modelMenuAnchor = null;
 let models = [], efforts = [], my = { model: "", model_label: "", effort: "" };
-const EFFORT_LABEL = { low: "Low", medium: "Medium", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra", auto: "Auto", "": "Default" };
+const EFFORT_LABEL = { minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "XHigh", max: "Max", ultra: "Ultra", auto: "Auto", "": "Default" };
 const cap = t => String(t || "").replace(/^\w/, ch => ch.toUpperCase());
 function drawModel() {
   const label = my.model ? my.model_label : "Default model";
@@ -4013,14 +4216,14 @@ function openModelMenu(anchor, provider) {
   const defaultEffort = selected?.default_effort;
   const effectiveEffort = my.effort || defaultEffort;
   m.innerHTML = `<div class="mh">Assistant for your turns</div>
-    <div class="effs">${(models.some(x => x.provider === "codex") ? ["claude", "codex"] : ["claude"]).map(p => `<button class="${provider === p ? "on" : ""}" data-provider="${p}">${cap(p)}</button>`).join("")}</div>
+    <div class="effs">${[...new Set(models.map(x => x.provider || "claude"))].map(p => `<button class="${provider === p ? "on" : ""}" data-provider="${p}">${cap(p)}</button>`).join("")}</div>
     ${provider === currentProvider ? `<div class="mh">Reasoning effort · ${esc(EFFORT_LABEL[effectiveEffort] || "Default")}</div>
-    <div class="effs" style="flex-wrap:wrap">${["", ...availableEfforts, "auto"].map(e => `<button style="flex:1 0 22%" class="${(my.effort || "") === e ? "on" : ""}" data-effort="${e}">${EFFORT_LABEL[e] || esc(e)}</button>`).join("")}</div>
-    <div class="note">${defaultEffort ? `Default uses ${esc(EFFORT_LABEL[defaultEffort] || defaultEffort)}. ` : ""}Auto chooses Medium or High for the task.</div>` : `<div class="note">Choose a model below, then set its reasoning effort.</div>`}
+    <div class="effs" style="flex-wrap:wrap">${["", ...availableEfforts, ...(provider === "gemini" ? [] : ["auto"])].map(e => `<button style="flex:1 0 22%" class="${(my.effort || "") === e ? "on" : ""}" data-effort="${e}">${EFFORT_LABEL[e] || esc(e)}</button>`).join("")}</div>
+    <div class="note">${defaultEffort ? `Default uses ${esc(EFFORT_LABEL[defaultEffort] || defaultEffort)}. ` : ""}${provider === "gemini" ? "These are this model’s native Google thinking levels." : "Auto chooses Medium or High for the task."}</div>` : `<div class="note">Choose a model below, then set its reasoning effort.</div>`}
     <div class="mh">${cap(provider)} models</div>
     ${models.filter(x => (x.provider || "claude") === provider && x.key !== "codex").map(x => `<button class="mo${(x.id || "") === (selectedId || "") ? " on" : ""}" data-model="${esc(x.key)}">
       <div><b>${esc(cap(x.label))}</b><small>${esc(x.desc)}</small></div><span class="ck">✓</span></button>`).join("")}
-    <div class="note">${provider === "codex" ? `Codex runs through ${esc(hostName || "the host")}’s Codex bridge, so that PC must be online. Claude stays available.` : "Your Claude models and conversations remain available."} Only your own turns use this choice.</div>`;
+    <div class="note">${provider === "gemini" ? `Gemini uses ${esc(hostName || "the host")}’s Google Cloud project and eligible trial credits while available. Effort choices are the selected model’s supported thinking levels. The host’s Google connection PC must be online.` : provider === "codex" ? `Codex runs through ${esc(hostName || "the host")}’s Codex bridge, so that PC must be online. Claude stays available.` : "Your Claude models and conversations remain available."} Only your own turns use this choice.</div>`;
   m.classList.add("on");
   const r = anchor.getBoundingClientRect(), w = 300, h = m.offsetHeight;
   m.style.left = Math.max(10, Math.min(innerWidth - w - 10, r.left)) + "px";
@@ -4294,6 +4497,7 @@ const COMMANDS = [
   ["/model opus", "your turns use Claude Opus 5.5"],
   ["/model sonnet", "your turns use Claude Sonnet 5.5"],
   ["/model haiku", "your turns use Claude Haiku 5.5"],
+  ["/model gemini/argon", "your turns use Gemini 4 Argon through Google Cloud"],
   ["/model default", "back to the room's default model"],
   ["/effort low", "think briefly"], ["/effort medium", "think a bit"], ["/effort high", "think more"],
   ["/effort xhigh", "think a lot"], ["/effort max", "think the most"], ["/effort default", "Claude Code's default effort"],
@@ -5286,7 +5490,7 @@ function uploadNow(file, pinTo) {
   row.innerHTML = `<span>${esc(file.name)} · ${size(file.size)}</span><div class="bar"><i></i></div>`;
   document.getElementById("uploads").appendChild(row);
   const xhr = new XMLHttpRequest();
-  xhr.open("POST", q("/upload") + "&name=" + encodeURIComponent(file.name) + (pinTo ? "&quiet=1" : ""));
+  xhr.open("POST", q("/upload") + "&name=" + encodeURIComponent(file.name) + (pinTo ? "&quiet=1" : "") + (curThread ? "&thread=" + encodeURIComponent(curThread) : ""));
   xhr.upload.onprogress = e => {
     if (!e.lengthComputable) return;
     row.querySelector("i").style.width = chip.querySelector(".bar i").style.width = (100 * e.loaded / e.total) + "%";

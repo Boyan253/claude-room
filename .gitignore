@@ -35,3 +35,11 @@ workspace/
 # --- Python ---
 __pycache__/
 *.pyc
+
+# --- per-person launchers and runtime folders (they carry join tokens or conversations) ---
+Claude Room.bat
+claude-room-*.bat
+gemini_sessions/
+operator/
+*.bak
+.claude/

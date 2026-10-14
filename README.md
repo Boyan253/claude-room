@@ -48,14 +48,18 @@ People join from a browser page, from a terminal client (`chat.py`), or both at 
   what was said in meetings.
 - **People chat.** A side chat just for the people. Claude doesn't read it unless someone forwards a
   message.
+- **Easy to follow with many threads.** People's messages stand out from the AI's answers (their own
+  colour bar), a rail on the chat's right edge marks every one of them (click to jump, Alt+↑ / Alt+↓),
+  and a message sent while Claude works lands between what it already said and what it says next.
+  One click shows a single thread; the Timeline folds into chapters by day or by thread.
 - **Everything else you expect from a chat.** Reactions, polls, pins, reminders, saved messages,
   search (Ctrl+K), notifications, a "previously on" recap when you come back, a usage pill that shows
   the host's Claude plan usage, automatic compaction of long threads, per-person model and effort,
   themes, and a few hidden things.
 - **Room rules.** Shared house rules plus each person's own rules, edited in the page's AI panel.
   Claude can also send requests to the room's developer (`room_feedback`, answered with `dev.py`).
-- **Optional Codex engine.** Through a Codex bridge you run yourself (see below), a person can switch
-  their own turns to OpenAI Codex. Claude stays available.
+- **Optional Codex and Gemini engines.** Through a Codex or Gemini bridge you run yourself (see below), a
+  person can switch their own turns to OpenAI Codex or Google Gemini. Claude stays available.
 
 ### For UEFN (Fortnite) teams
 
@@ -75,10 +79,6 @@ The room has features for teams that build one UEFN project together, each on th
 - **Lessons.** Threads write down what they learned (`lesson_add`), and every thread reads it from then on.
 
 If you don't use UEFN, these features stay out of the way.
-
-## Screenshots
-
-_Add screenshots here: the chat with threads, the Tasks board, the Timeline, the Whiteboard._
 
 ## Requirements
 
@@ -158,6 +158,7 @@ Use HTTPS for anything public: tokens travel in the URL.
 | `deepgram_api_key` | `""` | Live transcription of meetings recorded in the room. Or `DEEPGRAM_API_KEY`, or a `.env` next to the meetings folder. |
 | `groq_api_key` | `""` | Meeting summaries. Or `GROQ_API_KEY`, or that `.env`. |
 | `codex_bridge` | `{}` | `{"url": "...", "key": "..."}` of your Codex bridge. Codex models are offered only when `url` is set. |
+| `gemini_bridge` | `{}` | `{"url": "...", "key": "..."}` of your Gemini gateway. Gemini turns need it. |
 | `epic_names` | `{}` | Optional Epic (UEFN) account name to person, so check-ins name the right person before their `chat.py` reports it. |
 
 `chat.py` also reads `UEFN_PROJECTS_DIR` (where UEFN projects live, default `Documents\Fortnite Projects`)
@@ -192,6 +193,13 @@ OpenAI credentials live in the room. The bridge receives `POST {url}/turn` with
 bridge's Codex calls go through the same room MCP tools and the same approvals as Claude's.
 `codex_models.json` is the model catalog the picker shows.
 
+### Optional Gemini engine
+
+`gemini_provider.py` runs Gemini turns in the room itself and sends each model request to a gateway you
+run yourself (`POST {url}/generateContent` with `Authorization: Bearer {key}`), so Google credentials stay
+in that gateway. Tool calls go through the same room endpoints and approvals as Claude's, and an
+interrupted action is never run again by itself. `gemini_models.json` is its model catalog.
+
 ## Security notes
 
 - **Tokens are the only login.** Anyone with a token is that person. Use long random tokens (the
@@ -218,6 +226,7 @@ bridge's Codex calls go through the same room MCP tools and the same approvals a
 | `chat.py` | Terminal client (standard library). Shows the room, and, unless `--no-pc`, runs Claude's actions on this PC after approval: commands, files, screenshots, the UEFN MCP, Lore locks, the sync guard, undo. |
 | `room_mcp.py` | MCP server (stdio) that each Claude turn starts: the room's tools (PC actions, board, timeline, files, pictures, threads, zones, meetings, ...). It calls back into the server with the turn's secret. |
 | `codex_provider.py`, `codex_models.json` | Optional Codex engine through your own bridge. |
+| `gemini_provider.py`, `gemini_models.json` | Optional Gemini engine through your own gateway. |
 | `dev.py` | The developer's side of `room_feedback`: list, wait for and answer Claude's requests about the room. |
 | `run_room.py` | Starts the server hidden, logging to `server-runtime.log`. |
 | `room.bat` | Windows: start the server if needed and open your chat. |

@@ -1,0 +1,30 @@
+{
+  "gemini-4-argon": {
+    "key": "gemini/argon",
+    "label": "Gemini 4 Argon",
+    "description": "Flagship reasoning model for complex coding and multi-step work",
+    "efforts": ["low", "medium", "high"],
+    "default_effort": "medium"
+  },
+  "gemini-3.1-pro-preview": {
+    "key": "gemini/3.1-pro",
+    "label": "Gemini 3.1 Pro (Preview)",
+    "description": "Previous Pro generation for deep reasoning and complex tasks · Preview",
+    "efforts": ["low", "medium", "high"],
+    "default_effort": "high"
+  },
+  "gemini-3.8-flash": {
+    "key": "gemini/3.8-flash",
+    "label": "Gemini 3.8 Flash",
+    "description": "Latest Flash generation for coding and agentic workflows",
+    "efforts": ["low", "medium", "high"],
+    "default_effort": "medium"
+  },
+  "gemini-3.6-flash": {
+    "key": "gemini/3.6-flash",
+    "label": "Gemini 3.6 Flash",
+    "description": "Earlier Flash generation with an additional Minimal thinking level",
+    "efforts": ["minimal", "low", "medium", "high"],
+    "default_effort": "medium"
+  }
+}

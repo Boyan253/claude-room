@@ -33,6 +33,7 @@ import urllib.error
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlencode, urlparse
+from room_access_lock import ai_paused, AI_PAUSE_MESSAGE
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 WORKSPACE = os.path.join(ROOT, "workspace")
@@ -58,7 +59,7 @@ STROKE_TYPES = ("pen", "rect", "arrow", "text")
 FILES_DIR = os.path.join(ROOT, "files")          # shared files, stored as <id><ext>
 FILES_META = os.path.join(ROOT, "files.json")
 MAX_FILE = 500 * 1024 * 1024
-MAX_FILES_TOTAL = 3 * 1024 * 1024 * 1024
+MAX_FILES_TOTAL = 6 * 1024 * 1024 * 1024   # 17.10: 3 GB filled up (playtest GIFs)
 FEEDBACK = os.path.join(ROOT, "feedback.json")   # requests from the room's Claude to its developer
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp")
 PINS = os.path.join(ROOT, "pins.json")       # things pinned onto chat messages
@@ -1549,6 +1550,8 @@ class Room:
                 + "\n/thread new NAME opens one that runs at the same time · /threads all shows everyone's")
 
     def quick_claude(self, prompt, timeout=90):
+        if ai_paused():
+            return ""
         # one small question to a cheap model: no tools, no session, no room rules (summaries)
         os.makedirs(QUIET_DIR, exist_ok=True)
         try:
@@ -1561,6 +1564,8 @@ class Room:
             return ""
 
     def summarize(self, lane):
+        if ai_paused():
+            return
         with self.lock:
             if lane in self.summarizing:
                 return
@@ -2200,7 +2205,10 @@ class Room:
         if not text:
             return False, "the note is empty"
         note = f"[room] note from the thread {self.lane_label(from_lane)}: {text}"
-        if self.related(from_lane, target):   # parent <-> sub-thread: an idle one wakes up for it
+        # parent <-> sub-thread, or two threads of the same person (e.g. "the session is free"): an idle one wakes up for it.
+        # Not a Main conversation, a closed thread, or another person's thread (those get it at their next turn).
+        same_person = "/" in target and owner(target) == owner(from_lane) and not self.thread_closed(target)
+        if self.related(from_lane, target) or same_person:
             how = self.wake(target, note, f"(room) Message from {self.lane_label(from_lane)}: {text}", from_lane)
             self.broadcast({"t": "sys", "text": f"📨 {self.lane_label(from_lane)} → {self.lane_label(target)}: {clip(text, 200)}"})
             return True, f"delivered to {self.lane_label(target)} {how}"
@@ -2283,6 +2291,8 @@ class Room:
             return [a["secret"] for a in self.secrets.values() if a.get("secret")]
 
     def set_account(self, name, mode, secret):
+        if ai_paused():
+            return False, AI_PAUSE_MESSAGE
         if mode not in ("plan", "oauth", "api"):
             return False, "unknown account type"
         secret = str(secret or "").strip()
@@ -2308,6 +2318,8 @@ class Room:
         return True, ""
 
     def test_account(self, name):
+        if ai_paused():
+            return
         a = self.account_of(name)   # tried with exactly this secret (account_env only hands out tested ones)
         env = {"ANTHROPIC_API_KEY": a.get("secret", "")} if a.get("mode") == "api" else {"CLAUDE_CODE_OAUTH_TOKEN": a.get("secret", "")}
         ok, msg = False, "no answer"
@@ -2737,8 +2749,12 @@ class Room:
         self.broadcast({"t": "sys", "text": lines[what]}, keep=True)
 
     def pref(self, name):
-        """(model id, effort) this person's turns run with (all their threads)."""
-        p = self.cfg.get("prefs", {}).get(owner(name), {})
+        """(model id, effort) this person's turns run with (all their threads; a thread may have its own, e.g. for a model test)."""
+        prefs = self.cfg.get("prefs", {})
+        lane_pref = prefs.get(name, {}) if "/" in str(name or "") else {}
+        if lane_pref.get("model") in MODELS.values():
+            return lane_pref["model"], lane_pref.get("effort") or ""
+        p = prefs.get(owner(name), {})
         return p.get("model") or self.cfg.get("model") or "", p.get("effort") or self.cfg.get("effort") or ""
 
     def efforts_for(self, model):
@@ -2770,13 +2786,22 @@ class Room:
             save_json(CONFIG, self.cfg)
             self.send_to(name, {"t": "settings", **self.settings_view(name)})
             return
-        if model is not None and model in MODELS.values():
+        model_selected = model is not None and model in MODELS.values()
+        if model_selected:
             p["model"] = model
         allowed = self.efforts_for(self.pref(name)[0]) + ("", "auto")
-        if effort is not None and effort in allowed:
+        effort_selected = effort is not None and effort in allowed
+        if effort_selected:
             p["effort"] = effort
         if p.get("effort", "") not in allowed:
             p["effort"] = ""
+        if "/" not in name and (model_selected or effort_selected):
+            # The visible picker applies to all of this person's threads.
+            # Old per-thread test pins must not silently override a new choice.
+            for lane, lane_pref in self.cfg["prefs"].items():
+                if "/" in lane and owner(lane) == name:
+                    lane_pref.pop("model", None)
+                    lane_pref.pop("effort", None)
         save_json(CONFIG, self.cfg)
         m, e = self.pref(name)
         self.send_to(name, {"t": "settings", **self.settings_view(name)})
@@ -2825,7 +2850,7 @@ class Room:
                "mode": "your PC shared" if agent_info else "no PC shared", "busy": list(busy), "busy_secs": busy,
                "model": model_label(self.cfg.get("model")), "chat_version": latest, "web_version": web_version(),
                "notes": {str(v): RELEASE_NOTES[v] for v in sorted(RELEASE_NOTES)[-4:]}, "locks": self.locks_view(),
-               "settings": self.settings_view(name),
+               "settings": self.settings_view(name), "operator": self.operator_view(name), "ai_paused": ai_paused(),
                "models": self.models_info(), "efforts": list(EFFORTS), "threads": self.threads_view(), "usage": self.usage_view(),
                "room_version": ROOM_VERSION, "lane_meta": self.lane_meta_all(), "reacts": list(REACTS),
                "undos": self.undos_view(), "activity": self.activity_view(), "stars": self.stars_of(name),
@@ -2970,6 +2995,8 @@ class Room:
     def compact_lane(self, lane, how=COMPACT_HOW):
         """Claude Code's /compact on a thread's own session: a summary replaces the long history.
         Every request re-reads the whole conversation, so this is what keeps usage down."""
+        if ai_paused():
+            return "stopped"
         with self.state_lock:
             generation = self.generation
             info = self.state["lanes"].get(lane, {})
@@ -3052,7 +3079,7 @@ class Room:
         return {**(self.usage or {}), "contexts": self.contexts_view(), "compact_at": self.cfg.get("compact_at") or 0}
 
     def push_usage(self):
-        self.broadcast({"t": "usage", "usage": self.usage_view()})
+        self.broadcast({"t": "usage", "usage": self.usage_view(), "ai_paused": ai_paused()})
 
     def usage_line(self, long=False):
         u = self.usage or {}
@@ -3085,7 +3112,7 @@ class Room:
         if "/" in lane and text and not self.lane_meta(lane).get("goal"):   # a thread's first message is its goal until someone edits it
             self.set_lane_meta(lane, goal=clip(text, 400), goal_auto=True)
             self.broadcast({"t": "lane_meta", "meta": self.lane_meta_all()})
-        joined = self.inject(lane, f"[{name}] (added while you work): {said}{refs}", raw=said + refs)
+        joined = False if ai_paused() else self.inject(lane, f"[{name}] (added while you work): {said}{refs}", raw=said + refs)
         cut = {}
         if joined:   # where the answer stands now: the page shows what Claude says next under this message
             with self.lock:
@@ -3095,6 +3122,9 @@ class Room:
                     parts_now.append(["text", ""])   # the next words start a new part
         self.broadcast({"t": "msg", "from": name, "text": text, "ts": time.time(), "lane": lane, **({"joined": True} if joined else {}),
                         **cut, **({"files": attached} if attached else {})}, keep=True)
+        if ai_paused():
+            self.send_to(name, {"t": "sys", "text": AI_PAUSE_MESSAGE})
+            return  # Keep the human message, without queuing work to run after unlock.
         if joined:   # it went straight into the task running in this thread
             with self.lock:
                 self.injected.setdefault(lane, []).append(said)
@@ -3120,6 +3150,9 @@ class Room:
 
     def command(self, name, text, lane=None):
         cmd = text.split()[0].lower()
+        if ai_paused() and cmd in ("/continue", "/compact", "/image"):
+            self.send_to(name, {"t": "sys", "text": AI_PAUSE_MESSAGE})
+            return True
         if cmd == "/new":
             with self.state_lock:
                 self.generation += 1
@@ -3351,6 +3384,9 @@ class Room:
         max_wait = self.cfg["max_wait_seconds"]
         while True:
             with self.lock:
+                if ai_paused():
+                    self.lock.wait(1)
+                    continue
                 now = time.time()
                 # a person's turn starts once they've stopped typing for a moment
                 # (so a few quick messages go together) and their previous turn is over
@@ -3969,6 +4005,8 @@ class Room:
 
     def generate_image(self, who, prompt, aspect="square", source_id="", lane=None):
         """Make a picture and post it in the chat: Gemini ("nano banana") with a key, else Pollinations."""
+        if ai_paused():
+            return False, AI_PAUSE_MESSAGE
         prompt = clean_text(prompt, 2000)
         if not prompt:
             return False, "describe the picture"
@@ -4766,6 +4804,9 @@ class Room:
 
     def meeting_summarize(self, mid, who, announce=True):
         """Title + summary (SUMMARY_SYSTEM, in the meetings' language) from Groq; long meetings go in parts (free-tier limits)."""
+        if ai_paused():
+            self.broadcast({"t": "meetings", "id": mid, "by": who, "state": "summary", "error": AI_PAUSE_MESSAGE})
+            return
         with self.lock:
             if mid in self.meet_summarizing:
                 return
@@ -5008,6 +5049,8 @@ class Room:
         `askers` = whose turn made the call (decided by the server, not by Claude)."""
         lane = askers[0]
         askers = [owner(a) for a in askers]   # a thread acts for its person
+        if not user and len(set(askers)) == 1:
+            user = askers[0]   # a call without "user" (e.g. nested inside arguments) can only mean the asker's own PC
         if user not in askers:
             return False, (f"refused: this is {', '.join(askers)}'s turn and {user or 'nobody'} didn't ask for it. "
                            "Only act on the PC of the person whose turn it is.")
@@ -5094,7 +5137,37 @@ class Room:
             entry["done"].set()
 
     # ---- control threads: answered by the host's own Claude Code session (operator/inbox -> operator/outbox) ----
+    def operator_view(self, name):
+        path = os.path.join(OPERATOR_DIR, "routing.json")
+        config = load_json(path, {})
+        if name != config.get("lane") or not config.get("enabled"):
+            return {"available": False}
+        mode = config.get("mode", "auto")
+        limited = any(float(l.get("percent") or 0) >= 100 and float(l.get("resets") or 0) > time.time()
+                      for l in (self.usage or {}).get("limits", []))
+        active = ("codex" if limited else "claude") if mode == "auto" else mode
+        return {"available": True, "mode": mode, "active": active, "lane": name,
+                "scope": "Main", "busy": name in self.busy}
+
+    def set_operator(self, name, mode):
+        if not self.operator_view(name).get("available"):
+            return False, "This controller belongs to its room owner."
+        if mode not in ("auto", "claude", "codex"):
+            return False, "Choose Auto, Claude or Codex."
+        with self.notes_lock:
+            path = os.path.join(OPERATOR_DIR, "routing.json")
+            config = load_json(path, {})
+            config["mode"] = mode
+            save_json_safely(path, config)
+            self.notes["lanes"].setdefault(name, {})["engine"] = "operator"
+            save_json_safely(NOTES, self.notes)
+        state = self.operator_view(name)
+        self.send_to(name, {"t": "operator", "operator": state})
+        return True, state
+
     def ask_operator(self, lane, prompt):
+        if ai_paused():
+            return []
         aid = self.current_aid.get(lane) or ("a" + secrets.token_hex(4))
         with self.lock:
             texts = list((self.busy.get(lane) or {}).get("texts") or [])
@@ -5103,13 +5176,20 @@ class Room:
         inbox, outbox = os.path.join(OPERATOR_DIR, "inbox"), os.path.join(OPERATOR_DIR, "outbox")
         os.makedirs(inbox, exist_ok=True)
         os.makedirs(outbox, exist_ok=True)
+        # Reserve the controller before making the request visible to either
+        # watcher, so a manual choice cannot launch both assistants.
+        if self.operator_view(owner(lane)).get("available"):
+            from operator_routing import claim_for
+            chosen = self.operator_view(owner(lane))["active"]
+            if not claim_for(job, chosen, {"usage": self.usage or {}}):
+                return [["text", "This controller request is already claimed; it was not started again."]]
         with open(os.path.join(inbox, aid + ".json"), "w", encoding="utf-8") as f:
             json.dump(job, f, ensure_ascii=False, indent=1)
-        self.broadcast({"t": "status", "text": "waiting for the host's Claude Code", "lane": lane})
+        self.broadcast({"t": "status", "text": "waiting for the Main controller", "lane": lane})
         reply_path, deadline = os.path.join(outbox, aid + ".json"), time.time() + 45 * 60
         while time.time() < deadline:
             if lane in self.halted:
-                return [["text", "(stopped before the host's Claude Code answered)"]]
+                return [["text", "(stopped before the controller answered)"]]
             if os.path.exists(reply_path):
                 try:
                     with open(reply_path, encoding="utf-8") as f:
@@ -5121,9 +5201,11 @@ class Room:
                     self.broadcast({"t": "delta", "text": text, "lane": lane})
                     return [["text", text]]
             time.sleep(1)
-        return [["text", "The host's Claude Code didn't answer within 45 minutes; ask again, or switch back with /operator off."]]
+        return [["text", "The controller didn't answer within 45 minutes; ask again, or switch back with /operator off."]]
 
     def ask_claude(self, lane, prompt):
+        if ai_paused():
+            return [], False
         # a fresh secret per turn tells the server whose turn a PC action comes from
         if self.lane_meta(lane).get("engine") == "operator":   # a control thread: the host's Claude Code answers
             return self.ask_operator(lane, prompt), False
@@ -5144,6 +5226,8 @@ class Room:
                 self.procs.pop(lane, None)
 
     def _ask_claude(self, lane, prompt, token):
+        if ai_paused():
+            return [], False
         mcp = {"mcpServers": {"room": {
             "command": sys.executable, "args": [os.path.join(ROOT, "room_mcp.py")],
             "env": {"ROOM_URL": f"http://127.0.0.1:{self.cfg['port']}", "ROOM_EXEC_TOKEN": token}}}}
@@ -5840,6 +5924,10 @@ def make_handler(room):
                 self.send_header("Content-Length", str(len(body)))
                 self.end_headers()
                 self.wfile.write(body)
+            elif path == "/operator":
+                name = self.who()
+                if name:
+                    self.send_json(room.operator_view(name))
             elif path == "/files":
                 if self.who():
                     self.send_json(room.files_view())
@@ -6005,6 +6093,8 @@ def make_handler(room):
             self.send_header("X-Accel-Buffering", "no")
             self.end_headers()
             q = room.connect(name, agent, kind, version, update_url)
+            from room_idle_shutdown import register_client
+            register_client(room, q, parse_qs(urlparse(self.path).query).get("power_sid", [""])[0])
             try:
                 while True:
                     try:
@@ -6093,6 +6183,11 @@ def make_handler(room):
             if not name:
                 return
             body = self.body()
+            if path == "/operator":
+                ok, result = room.set_operator(name, body.get("mode"))
+                self.send_json({"ok": True, "operator": result} if ok else {"ok": False, "error": result},
+                               200 if ok else (403 if not room.operator_view(name).get("available") else 400))
+                return
             if path in ("/meeting_save", "/meeting_token", "/meeting_summarize"):
                 if path == "/meeting_token":
                     self.send_json(room.meeting_token())
@@ -6234,6 +6329,8 @@ def make_handler(room):
 
 
 def main():
+    from room_access_lock import enforce_startup
+    enforce_startup()
     sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     os.makedirs(WORKSPACE, exist_ok=True)
     cfg = load_config()
@@ -6258,6 +6355,8 @@ def main():
                 f.write(start)
 
     room = Room(cfg)
+    from room_idle_shutdown import attach
+    attach(room, ROOT)
     threading.Thread(target=room.worker, daemon=True).start()
     threading.Thread(target=room.archiver, daemon=True).start()
     threading.Thread(target=room.refresh_goals, daemon=True).start()

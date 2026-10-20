@@ -34,7 +34,7 @@ import urllib.parse
 import urllib.request
 import zlib
 
-VERSION = 39   # the server tells older clients to update; bump when the protocol changes
+VERSION = 41   # the server tells older clients to update; bump when the protocol changes
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CSI = "\x1b["
 RESET, BOLD, DIM = CSI + "0m", CSI + "1m", CSI + "2m"
@@ -2506,9 +2506,11 @@ def lore_history(repo, count=8):
 
 def sync_gate(tool, args):
     """None if the change may run; else why not (the copy is behind the shared project)."""
-    if tool not in ("write_file", "uefn_call", "undo_write") or not find_lore():
+    if uefn_py_command(tool, args) and find_lore():
+        repo = open_project()
+    elif tool not in ("write_file", "uefn_call", "undo_write") or not find_lore():
         return None
-    if tool == "uefn_call":
+    elif tool == "uefn_call":
         a = args.get("arguments") or {}
         name = str(a.get("tool_name") or "").split(".")[-1]
         if args.get("tool") in ("list_toolsets", "describe_toolset") or READ_UEFN.match(name or str(args.get("tool", ""))):
@@ -2786,12 +2788,24 @@ SCRIPT_CHANGES = re.compile(r"\b(set_\w+|Set[A-Z]\w*|add_\w+|Add[A-Z]\w*|remove\
 LEASE_LOCK = threading.Lock()
 LEASE = {}              # {"lane", "thread", "since", "state": "running" / "review", "touched", "had_session"} or empty
 LEASE_CONN = [None]     # the room connection, to report the lease
+LAST_START = []         # [lane, time] of the last StartSession from this PC: lets that thread stop it even if the lease was lost
 _session_cache = [0.0, ("", "")]
+
+
+# UEFN's Python remote execution (e.g. a project's uefnpy helpers: uefn_py.py, import_sounds.ps1) changes the editor from a plain
+# command, past uefn_call: such a command gets the same OUT OF DATE and HELD checks as an editor-wide UEFN call.
+UEFN_PY = re.compile(r"uefn_py\.py|import_sounds\.ps1|remote_execution\.py", re.I)
+
+
+def uefn_py_command(tool, args):
+    return tool == "run_command" and bool(UEFN_PY.search(str(args.get("command") or "")))
 
 
 def uefn_op(tool, args):
     """What a UEFN call does, for the lease: read / look (a script that only reads) / start / stop / saveall / wide /
     change; None for anything that isn't a UEFN call."""
+    if uefn_py_command(tool, args):
+        return "wide"
     if tool != "uefn_call":
         return None
     a = args.get("arguments") or {}
@@ -2876,7 +2890,10 @@ def lease_gate(op, lane, thread):
             return held_text(lease)
         status, game = session_state()
         if status != "Connected":
-            set_lease(None)   # that session is over
+            if status == "Disconnected" and time.time() - lease["since"] > 180:
+                set_lease(None)   # that session is over
+            else:
+                return held_text(lease)   # still launching (or the status is unknown): the starter keeps it
         elif game == "Running" or time.time() - lease.get("touched", lease["since"]) < 600:
             if game == "Running":
                 with LEASE_LOCK:
@@ -2890,10 +2907,13 @@ def lease_gate(op, lane, thread):
         report_lease()
     elif not lease and op in ("start", "stop"):
         status, game = session_state()
+        if op == "stop" and LAST_START and LAST_START[0] == lane and time.time() - LAST_START[1] < 3600:
+            return None   # the lease got lost (e.g. after a UEFN restart), but this thread started this session: it may stop it
         if status == "Connected" and game == "Running":
             return ("HELD: a playtest is running on this PC that none of your threads started: the person is probably "
                     "playing it. Don't start, stop or push into it; ask them first.")
     if op == "start":
+        LAST_START[:] = [lane, time.time()]
         with LEASE_LOCK:
             mine = LEASE.get("lane") == lane
         if not mine:

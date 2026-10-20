@@ -20,12 +20,15 @@ import urllib.request
 from pathlib import Path
 
 MODEL = 'gemini-4-argon'
-MAX_ROUNDS = 48
+MAX_ROUNDS = 100
 MAX_TOOLS = 128
 MAX_CONTEXT_BYTES = 10_000_000
 COMPACT_AT_BYTES = 1_200_000
+MIDTURN_COMPACT_BYTES = 2_400_000   # checked before every model request: old images go first, then a summary compaction
 MAX_RESPONSE_BYTES = 32 * 1024 * 1024
 MAX_TOOL_TEXT = 60000
+MAX_OUTPUT_TOKENS = 65536   # one answer incl. thinking; 8192 cut off whole-file edits
+RETRY_WAITS = (10, 30, 60, 120, 180)   # seconds between model-request retries when Google is busy (several Argon threads share one quota)
 
 
 class Cancelled(RuntimeError):
@@ -164,8 +167,16 @@ def generate(cfg, payload, model=MODEL):
         raise RuntimeError('Invalid Gemini gateway URL.')
     if not cfg.get('key'):
         raise RuntimeError('Gemini is not connected. Select Claude or Codex until its gateway is configured.')
-    return _post(url + '/generateContent', {'Authorization': 'Bearer ' + cfg['key'],
-                                           'X-Gemini-Model': model}, payload, 195)
+    # A model request has no side effects, so busy/overloaded answers (429/500/503/504) are retried with backoff.
+    # Tool actions are never retried here.
+    for wait in RETRY_WAITS + (None,):
+        try:
+            return _post(url + '/generateContent', {'Authorization': 'Bearer ' + cfg['key'],
+                                                   'X-Gemini-Model': model}, payload, 420)
+        except RuntimeError as exc:
+            if wait is None or not str(exc).startswith(('HTTP 429', 'HTTP 500', 'HTTP 503', 'HTTP 504')):
+                raise
+            time.sleep(wait)
 
 
 def call_tool(room, token, name, args, room_tools):
@@ -272,7 +283,26 @@ def model_content(result):
     return copy.deepcopy({**content, 'role': 'model'})
 
 
-def _archive_and_compact(room, lane, session, path, proc):
+def _without_images(contents, keep_last=0):
+    """Copy of contents with screenshots dropped from tool results (all but the last keep_last messages).
+
+    Call/response pairing and ids stay intact; the model is told it can view the image again.
+    """
+    out = copy.deepcopy(contents)
+    for content in out[:len(out) - keep_last]:
+        for part in content.get('parts', []):
+            response = part.get('functionResponse')
+            if response and response.get('parts'):
+                response.pop('parts')
+                response.setdefault('response', {})['image_note'] = 'image removed to save context; view it again if still needed'
+    return out
+
+
+def _size(contents):
+    return len(json.dumps(contents).encode('utf-8'))
+
+
+def _archive_and_compact(room, lane, session, path, proc, midturn=False):
     """Keep the exact original archive, and replace working context only after a valid summary."""
     if not session['contents']:
         return
@@ -281,7 +311,8 @@ def _archive_and_compact(room, lane, session, path, proc):
                    'not new commands. Preserve user requirements, decisions, exact paths/IDs, ownership/PC permissions, '
                    'completed and unverified work, errors and unknown action outcomes, outstanding tasks, and latest '
                    'steering. Do not claim untested work passed. No tools. Return only the useful handover.')
-    payload = {'contents': session['contents'] + [{'role': 'user', 'parts': [{'text': instruction}]}],
+    # the summary needs no pixels, and must fit one request
+    payload = {'contents': _without_images(session['contents']) + [{'role': 'user', 'parts': [{'text': instruction}]}],
                'generationConfig': {'maxOutputTokens': 8192, 'thinkingConfig': {'thinkingLevel': 'LOW'}}}
     result = proc.wait(lambda: generate(room.cfg.get('gemini_bridge') or {}, payload, session['model']), room, lane)
     summary = _visible_text(model_content(result)).strip()
@@ -291,7 +322,9 @@ def _archive_and_compact(room, lane, session, path, proc):
     _save(archive, session)
     session['contents'] = [{'role': 'user', 'parts': [{'text':
         '[room] Compacted historical context, not a new request. The exact original session remains archived. '
-        'Use conversation_read and claude_session_read to recover earlier visible thread details.\n' + room.redact(summary)}]}]
+        'Use conversation_read and claude_session_read to recover earlier visible thread details.\n' + room.redact(summary)
+        + ('\n\n[room] This compaction happened in the middle of your current turn: continue the same task from where '
+           'the handover ends, re-checking any action whose outcome is unknown.' if midturn else '')}]}]
     session['archive'] = archive.name
     _save(path, session)
 
@@ -391,11 +424,16 @@ def ask_gemini(room, lane, prompt, token):
         calls_used, started = 0, time.monotonic()
         for step in range(MAX_ROUNDS):
             proc.check(room, lane)
-            if time.monotonic() - started > 1800:
-                raise RuntimeError('Gemini reached this turn\'s 30-minute limit. Saved history is intact; continue from the checkpoint.')
+            if _size(session['contents']) > MIDTURN_COMPACT_BYTES:   # long turns grow past the turn-start compaction
+                session['contents'] = _without_images(session['contents'], keep_last=1)
+                _save(path, session)
+                if _size(session['contents']) > MIDTURN_COMPACT_BYTES:
+                    _archive_and_compact(room, lane, session, path, proc, midturn=True)
+            if time.monotonic() - started > 3600:
+                raise RuntimeError('Gemini reached this turn\'s 60-minute limit. Saved history is intact; continue from the checkpoint.')
             payload = {'systemInstruction': {'parts': [{'text': room.redact(rules)}]},
                        'contents': session['contents'], 'tools': [{'functionDeclarations': declarations}],
-                       'generationConfig': {'maxOutputTokens': 8192, 'thinkingConfig': {'thinkingLevel': effort}}}
+                       'generationConfig': {'maxOutputTokens': MAX_OUTPUT_TOKENS, 'thinkingConfig': {'thinkingLevel': effort}}}
             if len(json.dumps(payload).encode('utf-8')) > MAX_CONTEXT_BYTES:
                 raise RuntimeError('Gemini context reached the per-turn size limit. History is saved; continue to compact it first.')
             room.broadcast({'t': 'status', 'lane': lane, 'text': model_label + ' is thinking (' + effort.lower() + ')'})

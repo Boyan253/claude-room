@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="room-version" content="59">
+<meta name="viewport" content="width=device-width, initial-scale=1, interactive-widget=resizes-content">
+<meta name="room-version" content="60">
 <title>Claude Room</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Cdefs%3E%3ClinearGradient%20id%3D%22g%22%20x1%3D%220%22%20y1%3D%220%22%20x2%3D%221%22%20y2%3D%221%22%3E%3Cstop%20offset%3D%220%22%20stop-color%3D%22%23f3a07a%22/%3E%3Cstop%20offset%3D%22.55%22%20stop-color%3D%22%23e07a4c%22/%3E%3Cstop%20offset%3D%221%22%20stop-color%3D%22%23c75f34%22/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%228%22%20fill%3D%22url%28%23g%29%22/%3E%3Cg%20transform%3D%22translate%284%204%29%22%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-width%3D%222.4%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%3E%3Cpath%20d%3D%22M6%2020.5V10a6%206%200%200%201%2012%200v10.5M3.5%2020.5h17%22/%3E%3Cpath%20d%3D%22M12%209.2l.95%202.35%202.35.95-2.35.95L12%2015.8l-.95-2.35-2.35-.95%202.35-.95z%22%20fill%3D%22%23fff%22%20stroke-width%3D%221%22/%3E%3C/g%3E%3C/svg%3E">
 <script>try { const s = JSON.parse(localStorage.getItem("room-settings") || "{}"); if (s.theme) document.documentElement.dataset.theme = s.theme; if (s.accent) document.documentElement.dataset.accent = s.accent; } catch {}</script>
@@ -543,6 +543,16 @@
   #gifGrid { display:grid; grid-template-columns:repeat(3, 1fr); gap:6px; overflow-y:auto; }
   #gifGrid img { width:100%; height:80px; object-fit:cover; border-radius:7px; cursor:pointer; }
   #gifGrid .sys { grid-column:1 / -1; font-size:12px; line-height:1.5; }
+  #emoPop { position:absolute; left:10px; right:10px; bottom:58px; max-height:50%; display:none; flex-direction:column; padding:8px;
+            background:var(--surface-2); border:1px solid var(--border-2); border-radius:12px; box-shadow:var(--sh-3); z-index:3; }
+  #emoPop.on { display:flex; }
+  #emoTabs { display:flex; gap:2px; padding-bottom:6px; border-bottom:1px solid var(--border-2); flex:none; }
+  #emoTabs button { all:unset; cursor:pointer; padding:3px 6px; border-radius:7px; font-size:17px; opacity:.55; }
+  #emoTabs button.on, #emoTabs button:hover { opacity:1; background:var(--bg-2); }
+  #emoGrid { display:grid; grid-template-columns:repeat(auto-fill, minmax(34px, 1fr)); gap:2px; overflow-y:auto; padding-top:6px; }
+  #emoGrid button { all:unset; cursor:pointer; height:34px; display:grid; place-items:center; font-size:22px; border-radius:8px; }
+  #emoGrid button:hover { background:var(--bg-2); }
+  .pm .pt.big { font-size:38px; line-height:1.15; }
   #pmMenu { position:fixed; z-index:140; display:none; min-width:200px; padding:5px; background:var(--surface-2); border:1px solid var(--border-2);
             border-radius:11px; box-shadow:var(--sh-3); }
   #pmMenu.on { display:block; }
@@ -1630,6 +1640,47 @@
   #tbar .tswitch .tsname { flex:0 1 auto; min-width:24px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #tbar .tswitch .tcount { flex:0 50 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
   #tbar.tvTight .tswitch .tcount { display:none; }
+  #mobileMenuBtn, #mobileMenuPanel { display:none; }
+  /* phones: one-row navigation; secondary controls in an accessible menu */
+  @media (max-width: 1099px) { @supports (height: 100dvh) { html, body { height:100dvh; } } }   /* the visible screen, not behind the browser's toolbar */
+  @media (max-width: 760px) {
+    html { height:100%; overflow:hidden; }
+    body { position:fixed; top:var(--room-vv-top, 0px); left:0; width:100%; height:var(--room-vv-height, 100dvh); }
+    #main, #chat, #log { min-height:0; }
+    #chat { position:relative; }
+    #log { overscroll-behavior-y:contain; }
+    #top { gap:8px; padding:8px 10px; flex-wrap:nowrap; }
+    #top .brand, #searchBtn, #usageBtn, #modelChip, #lockBtn, #aiBtn, #bellBtn, #pcPill, #people { display:none !important; }
+    #tabs { flex:0 1 auto; min-width:0; } .tab { padding:8px 10px; min-height:40px; box-sizing:border-box; }
+    #tabs .tab:not([data-view="chat"]):not([data-view="threads"]) { display:none; }
+    #tabs .tab .tl { display:inline; }
+    #right { display:none; }
+    #mobileMenuBtn { display:block; margin-left:auto; min-height:44px; padding:8px 12px; border:1px solid var(--border-2); border-radius:10px; background:var(--surface-2); color:var(--text); font:inherit; cursor:pointer; }
+    #mobileMenuPanel.on { display:flex; }
+    #mobileMenuPanel { top:calc(var(--room-vv-top, 0px) + 65px); right:10px; max-height:calc(var(--room-vv-height, 100dvh) - 80px); overflow:auto; }
+    .mobileChoices { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; padding:10px; }
+    .mobileChoices button { min-height:44px; padding:8px 10px; border:1px solid var(--border); border-radius:8px; background:var(--surface-2); color:var(--text); text-align:left; font:inherit; cursor:pointer; }
+    #mobileMenuPanel #operatorBar { margin:0 10px 10px!important; }
+    #mobileMenuPanel #operatorChoice { display:block; width:100%; margin:6px 0!important; min-height:44px; font-size:16px!important; }
+    #mobileMenuPanel #operatorHint { display:block; }
+    #modelMenu, .panel { max-height:calc(var(--room-vv-height, 100dvh) - 80px); }
+    #modelMenu { top:calc(var(--room-vv-top, 0px) + 65px)!important; }
+    #pplPanel { top:calc(var(--room-vv-top, 0px) + 70px); bottom:auto; height:calc(var(--room-vv-height, 100dvh) - 82px); }
+    #pplIn { min-width:0; font-size:16px; }
+    #toasts { top:calc(var(--room-vv-top, 0px) + 72px); bottom:auto; left:10px; right:10px; max-height:calc(var(--room-vv-height, 100dvh) * .45); overflow:auto; }
+    #toasts .toast { max-width:100%; }
+    #status { padding:4px 14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #tbar { padding:6px 10px 0; }
+    #tbar .tmenu { max-height:min(200px, calc(var(--room-vv-height, 100dvh) * .35)); }
+    #tbar [data-tcards], #tbar [data-tview], #tbar [data-tsaved], #tbar [data-tonly], #tbar [data-tbarfull], #tbar .tgoal { display:none; }
+    #bar { flex:none; gap:0; padding:8px 10px max(10px, env(safe-area-inset-bottom)); }
+    #bar > #me, #bar .mpick, #mic { display:none; }   /* model: /model in the box */
+    .box { padding:4px 4px 4px 12px; }
+    #in { min-width:0; font-size:16px; max-height:min(160px, calc(var(--room-vv-height, 100dvh) * .3)); }
+    #bar .ib { width:40px; height:44px; }
+    #tpins { max-height:38px; overflow:auto; }
+    #leaseBar { max-height:44px; overflow:auto; }
+  }
 </style>
 </head>
 <body class="view-chat">
@@ -1664,6 +1715,15 @@
   <div id="leaseBar"></div>
   <div id="tpins"></div>
   <div id="tbar"></div>
+  <div id="operatorBar" hidden style="margin:0 14px 8px;padding:8px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);font-size:12px">
+    <label for="operatorChoice">Main controller</label>
+    <select id="operatorChoice" aria-label="Main controller" style="margin:0 8px;padding:5px;border-radius:6px;background:var(--surface-3);color:var(--text);border:1px solid var(--border)">
+      <option value="auto">Auto — Codex when Claude runs out</option>
+      <option value="claude">Claude</option>
+      <option value="codex">Codex — this conversation</option>
+    </select>
+    <span id="operatorHint" style="color:var(--text-3)" aria-live="polite"></span>
+  </div>
   <div id="stage"></div>
   <div id="bar"><span id="me">›</span><div class="box"><button class="mpick" id="mpick" title="Your model and effort (only your turns)"><span id="mpickLabel">Model</span><span class="eff" id="mpickEff"></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg></button><textarea id="in" rows="1" placeholder="Message · / for commands"></textarea>
     <button class="ib" id="mic" title="Speak instead of typing (language in ⚙ Settings)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
@@ -1764,7 +1824,8 @@
 <aside id="pplPanel"><div class="pphead"><b>💬 People</b><small>just the people · Claude doesn't read this</small><span class="grow"></span><button id="pplClear" title="Clear this chat for everyone (host only; a backup stays on the host)">🧹</button><button id="pplClose" title="Close">✕</button></div>
   <div id="pplLog"></div>
   <div id="gifPop"><input id="gifQ" placeholder="Search GIFs…"><div id="gifGrid"></div></div>
-  <div class="ppbar"><button class="ppx" id="pplGif" title="GIFs">GIF</button><button class="ppx" id="pplMeme" title="Make a meme from a picture">😂</button><textarea id="pplIn" rows="1" placeholder="Message… (Enter sends, paste a picture)"></textarea><button id="pplSend" title="Send">↑</button></div></aside>
+  <div id="emoPop"><div id="emoTabs"></div><div id="emoGrid"></div></div>
+  <div class="ppbar"><button class="ppx" id="pplEmo" title="Emoji">🙂</button><button class="ppx" id="pplGif" title="GIFs">GIF</button><button class="ppx" id="pplMeme" title="Make a meme from a picture">😂</button><textarea id="pplIn" rows="1" placeholder="Message… (Enter sends, paste a picture)"></textarea><button id="pplSend" title="Send">↑</button></div></aside>
 <div id="reactPop"></div>
 <div id="pollPop"><div class="pbox2"><div class="phead2">📊 New poll</div><input id="pollQ" maxlength="200" placeholder="Question, e.g. Which theme for the next level?"><div id="pollOpts"></div>
   <button class="tlink" id="pollAdd">+ option</button><div class="row"><span class="grow"></span><button class="btn" id="pollCancel">Cancel</button><button class="btn primary" id="pollGo">Start poll</button></div></div></div>
@@ -1808,7 +1869,7 @@ function openTerminal() {
   }, 3500);
 }
 const log = document.getElementById("log"), statusEl = document.getElementById("status"), input = document.getElementById("in");
-let me = "", colors = {}, online = [], mode = "", model = "", connected = false, hostName = "";
+let me = "", colors = {}, online = [], mode = "", model = "", connected = false, hostName = "", aiPaused = false;
 let webVersion = null;   // the page version this tab was loaded with
 const updateEl = document.getElementById("update");
 updateEl.querySelector("button").onclick = () => { post("/update_my_terminal").finally(() => location.reload()); };   // page and terminal together
@@ -1853,7 +1914,7 @@ function setView(v) {
   if (v === "threads") { tvSig = ""; tvRender(); }
   store.set("room-view", v);
   if (v === "draw") wbResize();
-  if (v === "chat") input.focus();
+  if (v === "chat" && !matchMedia("(max-width:760px)").matches) input.focus();
 }
 document.querySelectorAll(".tab").forEach(t => t.onclick = () => setView(t.dataset.view));
 function chatActivity() {
@@ -1931,6 +1992,29 @@ const ROOM_TIPS = [   // shown in the status line while at most one of your thre
 const roomTip = () => "Tip: " + ROOM_TIPS[Math.floor(Date.now() / 20000) % ROOM_TIPS.length];
 // ---- threads: lanes are "alice" (main) or "alice/inventory-ui" ----
 let threads = [], curThread = "", threadOnly = false, tEditing = null, tbarSig = "", tbarAll = false, tmenuOpen = false, pinsOpen = false;
+let operatorState = { available: false };
+function drawOperator() {
+  const bar = document.getElementById("operatorBar");
+  bar.hidden = !operatorState.available || !!curThread;
+  if (bar.hidden) return;
+  document.getElementById("operatorChoice").value = operatorState.mode || "auto";
+  const limited = (usage?.limits || []).some(l => +l.percent >= 100 && +l.resets > Date.now() / 1000);
+  const active = operatorState.mode === "auto" ? (limited ? "Codex" : "Claude") : operatorState.mode === "codex" ? "Codex" : "Claude";
+  document.getElementById("operatorHint").textContent = aiPaused ? "AI replies are paused until the host re-enables them." : `Next request: ${active}. A running request keeps its controller.`;
+}
+document.getElementById("operatorChoice").addEventListener("change", async e => {
+  const select = e.target, previous = operatorState.mode;
+  select.disabled = true;
+  try {
+    const response = await fetch(`/operator?t=${encodeURIComponent(token)}`, {method: "POST",
+      headers: {"Content-Type": "application/json"}, body: JSON.stringify({mode: select.value})});
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || "Could not change the controller");
+    operatorState = result.operator;
+    toast("Main controller saved");
+  } catch (error) { operatorState.mode = previous; toast(error.message); }
+  finally { select.disabled = false; drawOperator(); }
+});
 try { curThread = localStorage.getItem("room-thread") || ""; threadOnly = localStorage.getItem("room-thread-only") === "1"; } catch { /* no storage */ }
 const owner = l => String(l || "").split("/")[0];
 const threadName = l => {
@@ -1966,14 +2050,32 @@ function applyThreadFilter() {
   else log.scrollTop = log.scrollHeight;
   pinnedBottom = nearBottom();
 }
+// Each thread keeps its own unsent text (and staged attachments) in the box: switching threads swaps them.
+const drafts = {};
+try { Object.assign(drafts, JSON.parse(localStorage.getItem("room-drafts") || "{}")); } catch { /* no storage */ }
+let draftKey = null;
+function saveDraft() {
+  if (draftKey === null) return;
+  drafts[draftKey] = { text: input.value, staged };
+  try { localStorage.setItem("room-drafts", JSON.stringify(Object.fromEntries(Object.entries(drafts).filter(([, d]) => d.text).map(([k, d]) => [k, { text: d.text }])))); } catch { /* no storage */ }
+}
+function loadDraft(key) {
+  const d = drafts[key] || { text: "", staged: [] };
+  input.value = d.text || ""; staged = d.staged || []; drawStage();
+  input.style.height = ""; if (input.value) input.style.height = input.scrollHeight + "px";
+  sendBtn.classList.toggle("ready", !!input.value.trim() || staged.length > 0);
+  draftKey = key;
+}
 function setThread(l, quiet) {
   rememberScroll();
-  curThread = l && myThreads().some(t => t.id === l) ? l : "";
+  const next = l && myThreads().some(t => t.id === l) ? l : "";
+  if (next !== draftKey) { saveDraft(); curThread = next; loadDraft(next); }
+  curThread = next;
   doneUnseen.delete(curThread || me);
   drawThreadPins();
   try { localStorage.setItem("room-thread", curThread); } catch { /* no storage */ }
   input.placeholder = curThread ? `Message in # ${threadName(curThread)} · / for commands` : "Message · / for commands";
-  tbarSig = ""; drawThreads(); applyThreadFilter();
+  tbarSig = ""; drawThreads(); applyThreadFilter(); drawOperator();
   if (!quiet) input.focus();
 }
 function drawThreads() {
@@ -1989,7 +2091,7 @@ function drawThreads() {
       + `${l ? `<span class="x" data-tclose="${esc(l)}" title="Close this thread">×</span>` : ""}</button>`;
   const goalOf = (laneMeta[curThread || me] || {}).goal;
   const goalChip = goalOf ? `<span class="tgoal" title="${esc("What this thread is for (Claude reads it every turn):\n" + goalOf)}">🎯 ${esc(goalOf)}</span>` : "";
-  if (settings.compactBar !== false) {   // one row: the thread switcher, pins, goal, icons
+  if (settings.compactBar !== false || matchMedia("(max-width:760px)").matches) {   // phones always use one row; desktop keeps its preference
     const here = curThread || me;
     const working = Object.keys(busy).filter(l => owner(l) === me && l !== here).length;
     const finished = [...doneUnseen].filter(l => owner(l) === me && l !== here).length;
@@ -2290,7 +2392,8 @@ function handle(ev) {
   switch (ev.t) {
     case "hello":
       if (webVersion === null) webVersion = ev.web_version || ""; else newPage(ev.web_version);
-      me = ev.you; hostName = ev.host || ""; colors = ev.colors; latestChat = ev.chat_version || 0;
+      me = ev.you; hostName = ev.host || ""; colors = ev.colors; latestChat = ev.chat_version || 0; aiPaused = !!ev.ai_paused;
+      operatorState = ev.operator || { available: false };
       { const ppl = Object.keys(colors || {}), sub = document.querySelector("#top .brand small");
         if (sub) sub.textContent = ppl.length > 2 ? ppl.slice(0, -1).join(", ") + " & " + ppl[ppl.length - 1] : ppl.join(" & "); }
       notes = ev.notes || {}; locks = ev.locks || []; loadNotifs(); drawLocks();
@@ -2431,7 +2534,8 @@ function handle(ev) {
     case "notify": addNotif(ev.kind || "info", ev.title, ev.body,
       ev.kind === "lock" && ev.file ? ["Open locks", () => togglePanel("lockPanel", drawLockPanel)] : null, { desktop: ev.kind === "lock" || ev.kind === "reminder" }); break;
     case "locks": locks = ev.locks || []; drawLocks(); break;
-    case "usage": usage = ev.usage; drawUsage(); break;
+    case "usage": usage = ev.usage; if (ev.ai_paused !== undefined) aiPaused = !!ev.ai_paused; drawUsage(); drawOperator(); break;
+    case "operator": operatorState = ev.operator || { available: false }; drawOperator(); break;
     case "threads":
       threads = ev.threads || [];
       log.querySelectorAll(".ttag[data-thread]").forEach(t => { t.textContent = "# " + threadName(t.dataset.thread); });
@@ -2468,6 +2572,15 @@ function handle(ev) {
 
 function drawStatus() {
   if (!connected) { statusEl.textContent = "✗ disconnected, retrying…"; return; }
+  if (aiPaused) {
+    statusEl.textContent = "⏸ AI paused by the host · Chat is open";
+    statusEl.title = "AI replies stay paused for everyone until the host explicitly re-enables them. Messages are saved without starting AI work.";
+    statusEl.classList.remove("busy");
+    input.placeholder = "Message · AI replies paused";
+    if (me) drawThreads();
+    return;
+  }
+  statusEl.title = "";
   const bits = [];
   const lanes = Object.entries(busy).filter(([n]) => owner(n) === me).map(([n, b]) =>   // only your own threads
     `✻ ${funWord(n, b.since)}… ${n === me ? "Main" : "# " + (threadName(n) || n)} ${fmtDur((Date.now() - b.since) / 1000)}${busyNote(b) ? " · " + busyNote(b) : ""}`);
@@ -2490,7 +2603,23 @@ function drawStatus() {
 }
 setInterval(drawStatus, 500);
 
-const source = new EventSource(q("/events"));
+// Human-only activity for the requested 40-minute power policy. No AI calls.
+const powerSid = "p" + Date.now().toString(36) + Math.random().toString(36).slice(2);
+let powerLastInput = Date.now(), powerLastReport = 0, powerReportTimer = 0;
+function reportPowerActivity() {
+  if (connected && me) {
+    powerLastReport = Date.now();
+    post("/activity", {web:true, idle:Math.max(0,(Date.now()-powerLastInput)/1000), power_sid:powerSid}).catch(() => {});
+  }
+}
+["pointermove","pointerdown","keydown","wheel","touchstart"].forEach(t => addEventListener(t, e => {
+  if (!e.isTrusted) return;
+  powerLastInput = Date.now();
+  if (Date.now()-powerLastReport >= 2000) reportPowerActivity();
+  else if (!powerReportTimer) powerReportTimer = setTimeout(() => {powerReportTimer=0;reportPowerActivity();},2000);
+}, {passive:true,capture:true}));
+const source = new EventSource(q("/events") + "&power_sid=" + encodeURIComponent(powerSid));
+source.addEventListener("open", () => setTimeout(reportPowerActivity,1000));
 source.onmessage = e => handle(JSON.parse(e.data));
 source.onerror = () => { connected = false; drawStatus(); };
 
@@ -2971,6 +3100,37 @@ document.getElementById("pplGif").onclick = e => {
 gifQ.addEventListener("input", () => { clearTimeout(gifTimer); gifTimer = setTimeout(gifSearch, 300); });
 gifGrid.addEventListener("click", e => { const g = e.target.closest("[data-gif]"); if (g) { post("/pmsg", { url: g.dataset.gif }); gifPop.classList.remove("on"); } });
 addEventListener("pointerdown", e => { if (gifPop.classList.contains("on") && !gifPop.contains(e.target) && e.target.id !== "pplGif") gifPop.classList.remove("on"); }, true);
+// emoji: a picker for the people chat; the last ones used come first (kept in this browser)
+const emoPop = document.getElementById("emoPop"), emoTabs = document.getElementById("emoTabs"), emoGrid = document.getElementById("emoGrid");
+const EMO = {
+  "🕘": "",
+  "😀": "😀 😃 😄 😁 😆 😅 🤣 😂 🙂 🙃 😉 😊 😇 🥰 😍 🤩 😘 😋 😛 😜 🤪 😝 🤑 🤗 🤭 🤫 🤔 🤐 🤨 😐 😑 😶 😏 😒 🙄 😬 😮‍💨 🤥 😌 😔 😪 🤤 😴 😷 🤒 🤕 🤢 🤮 🥵 🥶 🥴 😵 🤯 🤠 🥳 😎 🤓 🧐 😕 😟 🙁 😮 😯 😲 😳 🥺 😦 😧 😨 😰 😥 😢 😭 😱 😖 😣 😞 😓 😩 😫 🥱 😤 😡 😠 🤬 😈 👿 💀 ☠️ 💩 🤡 👹 👺 👻 👽 🤖 😺 😸 😹 😻 😼 😽 🙀 😿 😾",
+  "👍": "👍 👎 👌 🤌 🤏 ✌️ 🤞 🤟 🤘 🤙 👈 👉 👆 👇 ☝️ 👋 🤚 🖐️ ✋ 🖖 👏 🙌 🫶 👐 🤲 🤝 🙏 ✍️ 💪 🦾 🧠 👀 👁️ 👅 👄 🫡 🫠 🫣 🫢",
+  "❤️": "❤️ 🧡 💛 💚 💙 💜 🖤 🤍 🤎 💔 ❣️ 💕 💞 💓 💗 💖 💘 💝 💯 💢 💥 💫 💦 💨 🕳️ 💬 💭 💤 🔥 ✨ ⭐ 🌟 ⚡ 🎉 🎊 🏆 🥇 ✅ ❌ ⚠️ ❓ ❗ 🆗 🆒 🆕",
+  "🎮": "🎮 🕹️ 👾 🎯 🎲 🧩 🔦 🕯️ 🔪 🗡️ 🪓 🔨 🪛 🔧 🔑 🗝️ 🚪 🪟 🛏️ 🪑 🧸 🎃 🕷️ 🕸️ 🦇 🐀 🧟 🧛 🧙 🩸 ⚰️ 🪦 🌑 🌕 🌲 🏚️ 🏨 💡 📷 🎥 🎬 🎵 🎶 🔊 🔇 💻 🖥️ ⌨️ 🖱️ 📱 🚀 🐛 🛠️ ⚙️ 📦",
+  "🍕": "🍕 🍔 🍟 🌭 🌮 🥙 🍝 🍜 🍣 🍩 🍪 🎂 🍫 🍿 🥤 ☕ 🍺 🍻 🥂 🧃 🍎 🍌 🍉 🍓 🥑 🌶️ 🧂 🍳 🥪",
+};
+let emoTab = "😀";
+const emoRecent = () => { try { return JSON.parse(localStorage.getItem("emoRecent") || "[]"); } catch { return []; } };
+function emoDraw() {
+  emoTabs.innerHTML = Object.keys(EMO).map(k => `<button data-etab="${k}" class="${k === emoTab ? "on" : ""}" title="${k === "🕘" ? "Recent" : ""}">${k}</button>`).join("");
+  const list = emoTab === "🕘" ? emoRecent() : EMO[emoTab].split(" ");
+  emoGrid.innerHTML = list.length ? list.map(e => `<button data-emo="${e}">${e}</button>`).join("") : `<div class="sys" style="grid-column:1/-1;font-size:12px">Nothing used yet.</div>`;
+}
+document.getElementById("pplEmo").onclick = e => {
+  e.stopPropagation(); gifPop.classList.remove("on");
+  if (emoPop.classList.toggle("on")) { emoTab = emoRecent().length ? "🕘" : "😀"; emoDraw(); }
+};
+emoTabs.addEventListener("click", e => { const b = e.target.closest("[data-etab]"); if (b) { emoTab = b.dataset.etab; emoDraw(); } });
+emoGrid.addEventListener("click", e => {
+  const b = e.target.closest("[data-emo]"); if (!b) return;
+  const em = b.dataset.emo, a = pplIn.selectionStart ?? pplIn.value.length, z = pplIn.selectionEnd ?? a;
+  pplIn.value = pplIn.value.slice(0, a) + em + pplIn.value.slice(z);
+  pplIn.focus(); pplIn.selectionStart = pplIn.selectionEnd = a + em.length;
+  pplIn.dispatchEvent(new Event("input"));
+  try { localStorage.setItem("emoRecent", JSON.stringify([em, ...emoRecent().filter(x => x !== em)].slice(0, 32))); } catch {}
+});
+addEventListener("pointerdown", e => { if (emoPop.classList.contains("on") && !emoPop.contains(e.target) && e.target.id !== "pplEmo") emoPop.classList.remove("on"); }, true);
 // memes: any picture + top and bottom text
 const memePop = document.getElementById("memePop"), memeCv = document.getElementById("memeCv");
 let memeImg = null;
@@ -3029,7 +3189,9 @@ function pmsgHtml(m) {
   const lone = /^https?:\/\/\S+\.(gif|png|jpe?g|webp)(\?\S*)?$/i.test((m.text || "").trim()) ? m.text.trim() : "";
   const pic = m.url || lone ? `<a href="${esc(m.url || lone)}" target="_blank" rel="noopener"><img src="${esc(m.url || lone)}" alt="" loading="lazy"></a>` : "";
   const ref = m.ref ? `<button class="pref" data-jump="${esc(m.ref.id)}" title="Show it in Claude's chat">↪ <b>${esc(m.ref.who)}</b>: ${esc(m.ref.snip)}</button>` : "";
-  return `<div class="pm${mine ? " mine" : ""}">${mine ? "" : avatar(m.from)}<div class="pb">${ref}${m.text && !lone ? `<div class="pt">${renderText(m.text)}</div>` : ""}${pic}${file}`
+  const big = /^(\p{Extended_Pictographic}|\p{Emoji_Component}|‍|️|\s){1,24}$/u.test((m.text || "").trim()) && /\p{Extended_Pictographic}/u.test(m.text || "")
+    && [...(m.text || "").trim().matchAll(/\p{Extended_Pictographic}/gu)].length <= 3;
+  return `<div class="pm${mine ? " mine" : ""}">${mine ? "" : avatar(m.from)}<div class="pb">${ref}${m.text && !lone ? `<div class="pt${big ? " big" : ""}">${renderText(m.text)}</div>` : ""}${pic}${file}`
     + `<div class="pmeta">${hhmm(m.ts)}${m.text ? `<button class="pask" data-pask="${esc(m.id)}" title="Quote it to Claude, in your chat">↗ Claude</button>` : ""}`
     + `<button class="pmore" data-pmore="${esc(m.id)}" title="Send it to a Claude thread, Tasks, the Timeline or the whiteboard">⋯</button></div></div></div>`;
 }
@@ -3105,7 +3267,7 @@ pplLog.addEventListener("click", e => {
   if (!wide()) setView("chat");
   setInput(`> ${m.from}: ${m.text}\n`); input.focus();
 });
-if (store.get("room-ppl") === "1") document.documentElement.classList.add("ppl-open");
+if (store.get("room-ppl") === "1" && !matchMedia("(max-width: 760px)").matches) document.documentElement.classList.add("ppl-open");   // on a phone it would cover the message box
 const fitTop = () => document.documentElement.style.setProperty("--topH", document.getElementById("top").offsetHeight + "px");
 addEventListener("resize", fitTop); fitTop();
 
@@ -3230,7 +3392,7 @@ document.getElementById("savedPanel").addEventListener("click", e => {
   const j = e.target.closest("[data-sjump]");
   if (j) { document.getElementById("savedPanel").classList.remove("on"); jumpTo(j.dataset.sjump); }
 });
-setInterval(() => { if (connected && me) post("/activity", { web: true, idle: Math.round((Date.now() - lastStir) / 1000) }); }, 60000);
+setInterval(reportPowerActivity, 60000);
 
 // =================================================================== back to the newest messages; finished threads
 let unseenBelow = 0, doneUnseen = new Set();
@@ -4566,16 +4728,16 @@ function sendInput() {
     const ids = staged.filter(s => s.id).map(s => s.id), text = input.value.trim();
     staged.forEach(s => s.url && URL.revokeObjectURL(s.url)); staged = []; drawStage();
     if (ids.length || text) post("/say", { text, files: ids, ...(curThread ? { thread: curThread } : {}) });
-    input.value = ""; input.style.height = ""; sendBtn.classList.remove("ready"); completeBase = null; sel = 0; drawSuggest(); input.focus();
+    input.value = ""; input.style.height = ""; sendBtn.classList.remove("ready"); completeBase = null; sel = 0; drawSuggest(); input.focus(); saveDraft();
     return;
   }
-  if (clientCommand(input.value.trim())) { input.value = ""; input.style.height = ""; drawSuggest(); return; }
+  if (clientCommand(input.value.trim())) { input.value = ""; input.style.height = ""; drawSuggest(); saveDraft(); return; }
   const m = matches();
   if (m.length && !COMMANDS.some(c => c[0] === input.value.trim().toLowerCase())) setInput(m[sel % m.length][0]);
   const text = input.value;
   if (text.trim()) post("/say", curThread ? { text, thread: curThread } : { text }).catch(() => add("· not sent: " + esc(text), "sys"));
   input.value = ""; input.style.height = ""; sendBtn.classList.remove("ready");
-  completeBase = null; sel = 0; drawSuggest(); input.focus();
+  completeBase = null; sel = 0; drawSuggest(); input.focus(); saveDraft();
 }
 const sendBtn = document.getElementById("send");
 sendBtn.onclick = sendInput;
@@ -4584,6 +4746,7 @@ input.addEventListener("input", () => {
   sendBtn.classList.toggle("ready", !!input.value.trim());
   input.style.height = ""; input.style.height = input.scrollHeight + "px";
   if (Date.now() - lastTyping > 800) { lastTyping = Date.now(); post("/typing"); }
+  saveDraft();
 });
 
 // =================================================================== task board
@@ -6552,6 +6715,78 @@ tvEl.addEventListener("keydown", e => {
     if (n) n.focus({ preventScroll: true });
   }
 });
+
+// Keep the composer above a phone keyboard that overlays the layout viewport.
+const phoneLayout = matchMedia("(max-width:760px)");
+const mobileMenuBtn = document.createElement("button");
+mobileMenuBtn.id = "mobileMenuBtn";
+mobileMenuBtn.type = "button";
+mobileMenuBtn.textContent = "Menu";
+mobileMenuBtn.setAttribute("aria-expanded", "false");
+mobileMenuBtn.setAttribute("aria-controls", "mobileMenuPanel");
+document.getElementById("top").append(mobileMenuBtn);
+const mobileMenuPanel = document.createElement("div");
+mobileMenuPanel.id = "mobileMenuPanel";
+mobileMenuPanel.className = "panel";
+mobileMenuPanel.setAttribute("aria-label", "Room menu");
+mobileMenuPanel.innerHTML = '<div class="phead"><b>Room menu</b><button type="button" data-mobile-close aria-label="Close menu">Close</button></div><div class="mobileChoices"></div>';
+document.body.append(mobileMenuPanel);
+const mobileChoices = mobileMenuPanel.querySelector(".mobileChoices");
+function closeMobileMenu() {
+  mobileMenuPanel.classList.remove("on");
+  mobileMenuBtn.setAttribute("aria-expanded", "false");
+}
+function addMobileAction(label, action) {
+  const b = document.createElement("button");
+  b.type = "button"; b.textContent = label;
+  b.onclick = () => { closeMobileMenu(); action(); };
+  mobileChoices.append(b);
+}
+for (const [label, target] of [["Tasks", "tasks"], ["Timeline", "timeline"], ["Meetings", "meetings"], ["Files", "files"], ["Whiteboard", "draw"]]) {
+  addMobileAction(label, () => setView(target));
+}
+addMobileAction("Model & effort", () => openModelMenu(mobileMenuBtn));
+for (const [label, target] of [["People chat", "pplBtn"], ["Search", "searchBtn"], ["Usage", "usageBtn"], ["AI settings", "aiBtn"], ["Notifications", "bellBtn"], ["PC locks", "lockBtn"], ["Settings", "setBtn"]]) {
+  addMobileAction(label, () => document.getElementById(target).click());
+}
+mobileMenuBtn.onclick = () => {
+  const opening = !mobileMenuPanel.classList.contains("on");
+  document.querySelectorAll(".panel.on, #modelMenu.on").forEach(p => p.classList.remove("on"));
+  mobileMenuPanel.classList.toggle("on", opening);
+  mobileMenuBtn.setAttribute("aria-expanded", String(opening));
+};
+mobileMenuPanel.querySelector("[data-mobile-close]").onclick = () => { closeMobileMenu(); mobileMenuBtn.focus({preventScroll:true}); };
+document.addEventListener("pointerdown", e => {
+  if (!mobileMenuPanel.contains(e.target) && !mobileMenuBtn.contains(e.target)) closeMobileMenu();
+}, true);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && mobileMenuPanel.classList.contains("on")) { closeMobileMenu(); mobileMenuBtn.focus({preventScroll:true}); }
+});
+const operatorHome = document.createComment("Main controller desktop position");
+const mobileOperatorBar = document.getElementById("operatorBar");
+mobileOperatorBar.before(operatorHome);
+function syncPhoneLayout() {
+  closeMobileMenu();
+  if (phoneLayout.matches) mobileMenuPanel.append(mobileOperatorBar);
+  else operatorHome.after(mobileOperatorBar);
+  tbarSig = ""; drawThreads();
+  syncPhoneViewport();
+}
+function syncPhoneViewport() {
+  const root = document.documentElement, vv = window.visualViewport;
+  // Preserve pinch zoom; follow keyboard/browser-chrome changes only at 1x.
+  if (phoneLayout.matches && (!vv || Math.abs(vv.scale - 1) < .05)) {
+    root.style.setProperty("--room-vv-height", `${vv ? vv.height : innerHeight}px`);
+    root.style.setProperty("--room-vv-top", `${vv ? vv.offsetTop : 0}px`);
+  } else if (!phoneLayout.matches) {
+    root.style.removeProperty("--room-vv-height"); root.style.removeProperty("--room-vv-top");
+  }
+}
+phoneLayout.addEventListener("change", syncPhoneLayout);
+addEventListener("resize", syncPhoneViewport);
+window.visualViewport?.addEventListener("resize", syncPhoneViewport);
+window.visualViewport?.addEventListener("scroll", syncPhoneViewport);
+syncPhoneLayout();
 
 buildToolbar(); setCursor();
 wb.view = { x: 0, y: 0, k: 1 };

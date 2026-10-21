@@ -114,11 +114,53 @@
   .avatar svg { width:1.2em; height:1.2em; display:block; }
 
   #main { flex:1; display:flex; min-height:0; }
-  #chat { flex:1; display:flex; flex-direction:column; min-width:0; }
+  #chat { flex:1; display:flex; flex-direction:row; min-width:0; }
+  #chatMain { flex:1; min-width:0; min-height:0; display:flex; flex-direction:column; }
+  #threadSidebar { width:228px; flex:0 0 228px; min-height:0; display:flex; flex-direction:column; gap:10px; padding:14px 10px 12px;
+    box-sizing:border-box; border-right:1px solid var(--border); background:rgba(9,11,14,.34); }
+  body.threads-bottom #threadSidebar { display:none; }
+  body.threads-left #tbar { display:none; }
+  .threadNavHead > span { display:flex; align-items:center; gap:3px; }
+  .threadNavNameInput { min-width:0; width:100%; box-sizing:border-box; padding:7px 8px; border:1px solid var(--accent); border-radius:7px; background:var(--surface); color:var(--text); font:12px var(--ui); }
+  .threadNavCreate { margin-top:1px; }
+  .threadNavOps { display:flex; flex:none; opacity:0; transition:opacity .12s; }
+  .threadNavRow:hover .threadNavOps, .threadNavRow:focus-within .threadNavOps { opacity:1; }
+  .threadNavOps button { all:unset; cursor:pointer; width:24px; height:26px; display:grid; place-items:center; border-radius:6px; color:var(--text-3); font:14px var(--ui); }
+  .threadNavOps button:hover { background:var(--surface-3); color:var(--text); }
+  .threadNavOps [data-nav-close]:hover { color:var(--red); }
+  .threadNavTools { display:flex; gap:6px; border-top:1px solid var(--border); padding-top:8px; }
+  .threadNavTools button { flex:1; min-width:0; padding:6px 4px; border:1px solid var(--border); border-radius:7px; background:var(--surface-2); color:var(--text-2); font:11px var(--ui); cursor:pointer; }
+  .threadNavTools button:hover { color:var(--text); border-color:var(--border-3); }
+  @media (hover:none) { .threadNavOps { opacity:1; } }
+  .threadNavHead { display:flex; align-items:center; justify-content:space-between; padding:2px 6px; color:var(--text-2); font-size:12px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+  .threadNavHead button { all:unset; cursor:pointer; width:28px; height:28px; display:grid; place-items:center; border-radius:8px; color:var(--text-2); font-size:19px; }
+  .threadNavHead button:hover { background:var(--surface-3); color:var(--text); }
+  .threadNavSearch { display:flex; align-items:center; gap:7px; min-height:34px; padding:0 9px; border-radius:8px; border:1px solid var(--border); background:var(--surface); color:var(--text-3); }
+  .threadNavSearch:focus-within { border-color:var(--accent); }
+  .threadNavSearch input { all:unset; width:100%; min-width:0; color:var(--text); font:12.5px var(--ui); }
+  .threadNavSearch input::placeholder { color:var(--text-3); }
+  .threadNavList { min-height:0; flex:1; overflow:auto; display:flex; flex-direction:column; gap:3px; }
+  .threadNavSection { padding:10px 7px 4px; color:var(--text-3); font-size:10px; font-weight:750; letter-spacing:.1em; text-transform:uppercase; }
+  .threadNavRow { min-width:0; display:flex; align-items:center; gap:2px; border-radius:8px; }
+  .threadNavRow:hover { background:var(--surface-2); }
+  .threadNavRow.on { background:var(--surface-3); box-shadow:inset 2px 0 var(--accent); }
+  .threadNavPick { all:unset; cursor:pointer; min-width:0; flex:1; display:flex; align-items:center; gap:8px; padding:8px 7px; color:var(--text-2); font:550 12.5px var(--ui); }
+  .threadNavPick:hover, .threadNavRow.on .threadNavPick { color:var(--text); }
+  .threadNavName { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .threadNavState { margin-left:auto; flex:none; color:var(--text-3); font-size:10px; }
+  .threadNavState.run { color:var(--accent-2); animation:tpulse 1.1s ease-in-out infinite; }
+  .threadNavState.done { color:var(--green); }
+  .threadNavWarn { all:unset; cursor:pointer; flex:none; width:28px; height:28px; display:grid; place-items:center; border-radius:7px; color:var(--yellow); }
+  .threadNavWarn:hover { background:rgba(233,196,126,.14); }
+  .threadNavReopen { all:unset; cursor:pointer; flex:none; margin:0 6px; padding:4px 7px; border:1px solid var(--border); border-radius:6px; color:var(--text-3); font-size:10px; }
+  .threadNavReopen:hover { color:var(--text); border-color:var(--border-3); }
+  .threadNavEmpty { padding:9px 7px; color:var(--text-3); font-size:12px; line-height:1.5; }
+  :root[data-theme="light"] #threadSidebar { background:rgba(255,255,255,.68); }
   #tasks, #draw, #files, #timeline, #meetings { display:none; flex:1; min-width:0; }
   body.view-tasks #tasks, body.view-draw #draw, body.view-files #files, body.view-timeline #timeline, body.view-meetings #meetings { display:flex; }
   @media (min-width: 1100px) {
     body:not(.view-chat) #chat { flex:0 0 420px; border-right:1px solid var(--border); background:rgba(9,11,14,.55); }
+    body:not(.view-chat) #threadSidebar { display:none; }
   }
   @media (max-width: 1099px) { body:not(.view-chat) #chat { display:none; } }
 
@@ -1648,6 +1690,8 @@
     body { position:fixed; top:var(--room-vv-top, 0px); left:0; width:100%; height:var(--room-vv-height, 100dvh); }
     #main, #chat, #log { min-height:0; }
     #chat { position:relative; }
+    #threadSidebar { display:none; }
+    #chatMain { width:100%; }
     #log { overscroll-behavior-y:contain; }
     #top { gap:8px; padding:8px 10px; flex-wrap:nowrap; }
     #top .brand, #searchBtn, #usageBtn, #modelChip, #lockBtn, #aiBtn, #bellBtn, #pcPill, #people { display:none !important; }
@@ -1672,7 +1716,7 @@
     #status { padding:4px 14px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
     #tbar { padding:6px 10px 0; }
     #tbar .tmenu { max-height:min(200px, calc(var(--room-vv-height, 100dvh) * .35)); }
-    #tbar [data-tcards], #tbar [data-tview], #tbar [data-tsaved], #tbar [data-tonly], #tbar [data-tbarfull], #tbar .tgoal { display:none; }
+    #tbar [data-tcards], #tbar [data-tview], #tbar [data-tsaved], #tbar [data-tonly], #tbar [data-tbarfull], #tbar [data-thread-placement-toggle], #tbar .tgoal { display:none; }
     #bar { flex:none; gap:0; padding:8px 10px max(10px, env(safe-area-inset-bottom)); }
     #bar > #me, #bar .mpick, #mic { display:none; }   /* model: /model in the box */
     .box { padding:4px 4px 4px 12px; }
@@ -1706,6 +1750,12 @@
 
 <div id="main">
 <section id="chat">
+  <aside id="threadSidebar" aria-label="Conversation threads">
+    <div class="threadNavHead"><b>Threads</b><span><button data-thread-placement-toggle type="button" title="Show threads in the bottom bar">&#8595;</button><button id="threadNavNew" type="button" title="Start a new thread">&#43;</button></span></div>
+    <label class="threadNavSearch"><span aria-hidden="true">⌕</span><input id="threadNavSearch" type="search" placeholder="Find a thread" autocomplete="off"></label>
+    <div id="threadNav" class="threadNavList"></div>
+  </aside>
+  <div id="chatMain">
   <div id="update"><span>⬆ A new version of the room is out.</span><button>Update</button></div>
   <div id="log"></div>
   <button id="toLatest" title="Back to the newest messages">↓ Latest</button>
@@ -1729,6 +1779,7 @@
     <button class="ib" id="mic" title="Speak instead of typing (language in ⚙ Settings)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
     <button class="ib" id="attach" title="Share a file with the room"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.4 11.1-9.2 9.2a6 6 0 0 1-8.5-8.5l9.2-9.2a4 4 0 0 1 5.7 5.7l-9.2 9.2a2 2 0 0 1-2.8-2.8l8.5-8.5"/></svg></button>
     <button class="ib" id="send" title="Send (Enter)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></button></div></div>
+  </div>
 </section>
 
 <section id="tasks">
@@ -1807,7 +1858,7 @@
 <div class="panel" id="notifPanel"></div>
 <div id="modelMenu"></div>
 <div class="menu" id="bmenu"></div>
-<div id="palette"><div class="pbox"><input id="pin" placeholder="Search cards, files, boards, or type an action…" autocomplete="off"><div class="pl" id="plist"></div>
+<div id="palette"><div class="pbox"><input id="pin" placeholder="Search threads, messages, cards, files, or actions…" autocomplete="off"><div class="pl" id="plist"></div>
   <div class="pf"><span><span class="kbd">↑</span> <span class="kbd">↓</span> pick</span><span><span class="kbd">Enter</span> open</span><span><span class="kbd">Esc</span> close</span></div></div></div>
 <canvas id="confetti"></canvas>
 <div class="panel" id="lockPanel"></div>
@@ -1992,6 +2043,20 @@ const ROOM_TIPS = [   // shown in the status line while at most one of your thre
 const roomTip = () => "Tip: " + ROOM_TIPS[Math.floor(Date.now() / 20000) % ROOM_TIPS.length];
 // ---- threads: lanes are "alice" (main) or "alice/inventory-ui" ----
 let threads = [], curThread = "", threadOnly = false, tEditing = null, tbarSig = "", tbarAll = false, tmenuOpen = false, pinsOpen = false;
+let threadPlacement = "left", threadNavDraft = "";
+try { threadPlacement = localStorage.getItem("room-thread-placement") === "bottom" ? "bottom" : "left"; } catch { /* default to the left column */ }
+function applyThreadPlacement() {
+  const left = threadPlacement === "left" && matchMedia("(min-width: 761px)").matches;
+  document.body.classList.toggle("threads-left", left);
+  document.body.classList.toggle("threads-bottom", !left);
+}
+function setThreadPlacement(place) {
+  threadPlacement = place === "left" ? "left" : "bottom";
+  try { localStorage.setItem("room-thread-placement", threadPlacement); } catch { /* no storage */ }
+  applyThreadPlacement(); tbarSig = ""; drawThreads();
+}
+applyThreadPlacement();
+addEventListener("resize", applyThreadPlacement);
 let operatorState = { available: false };
 function drawOperator() {
   const bar = document.getElementById("operatorBar");
@@ -2025,6 +2090,39 @@ const threadName = l => {
 const laneLabel = l => threadName(l) ? `${owner(l)} · ${threadName(l)}` : String(l || "");
 const tTag = l => threadName(l) ? `<span class="ttag" data-thread="${esc(l)}" title="Thread"># ${esc(threadName(l))}</span>` : "";
 const myThreads = () => threads.filter(t => t.owner === me && !t.closed);
+function drawThreadSidebar() {
+  const nav = document.getElementById("threadNav");
+  if (!nav) return;
+  const inputEl = document.getElementById("threadNavSearch");
+  const filter = (inputEl?.value || "").trim().toLowerCase();
+  const hadFocus = inputEl === document.activeElement;
+  const open = myThreads().filter(t => !filter || t.name.toLowerCase().includes(filter));
+  const archived = threads.filter(t => t.owner === me && t.closed && (!filter || t.name.toLowerCase().includes(filter)));
+  const row = (lane, name, closed = false, t = null) => {
+    const isMain = lane === me, current = (curThread || me) === lane;
+    const b = busy[lane], finished = !b && doneUnseen.has(lane), editing = !closed && tEditing === lane;
+    const state = b ? '<span class="threadNavState run" title="Working">&#9679;</span>' : finished ? '<span class="threadNavState done" title="Finished">&#10003;</span>' : '';
+    const warn = !closed && t?.archive_warning
+      ? `<button class="threadNavWarn" type="button" data-nav-archive="${esc(lane)}" title="Review archive suggestion" aria-label="Review archive suggestion for ${esc(name)}">&#9888;</button>` : '';
+    const pick = editing
+      ? `<input class="threadNavNameInput" id="threadNavName" data-nav-edit="${esc(lane)}" maxlength="40" value="${esc(threadNavDraft)}" aria-label="Rename thread">`
+      : `<button class="threadNavPick" type="button" data-nav-thread="${esc(lane)}" ${closed ? `data-nav-reopen="${esc(lane)}"` : ''} title="${esc(name)}"><span aria-hidden="true">${isMain ? '&#8962;' : '#'}</span><span class="threadNavName">${esc(name)}</span>${state}</button>`;
+    const ops = !closed && lane !== me && !editing
+      ? `<span class="threadNavOps"><button type="button" data-nav-rename="${esc(lane)}" title="Rename thread" aria-label="Rename ${esc(name)}">&#9998;</button><button type="button" data-nav-close="${esc(lane)}" title="Archive thread" aria-label="Archive ${esc(name)}">&#215;</button></span>` : '';
+    return `<div class="threadNavRow${current ? " on" : ""}${closed ? " archived" : ""}">${pick}${warn}${ops}`
+      + (closed ? `<button class="threadNavReopen" type="button" data-nav-reopen="${esc(lane)}">Reopen</button>` : "")
+      + `</div>`;
+  };
+  const newInput = tEditing === "new" ? `<input class="threadNavNameInput threadNavCreate" id="threadNavName" maxlength="40" placeholder="Name the new thread, then press Enter" value="${esc(threadNavDraft)}" aria-label="New thread name">` : '';
+  const html = `${newInput}<div class="threadNavSection">Conversations</div>${row(me, "Main")}`
+    + open.map(t => row(t.id, t.name, false, t)).join("")
+    + `<div class="threadNavSection">Archived <span>${archived.length}</span></div>`
+    + (archived.map(t => row(t.id, t.name, true, t)).join("") || `<div class="threadNavEmpty">${filter ? "No matching archived threads" : "No archived threads"}</div>`)
+    + `<div class="threadNavTools"><button type="button" data-nav-cards>Cards</button><button type="button" data-nav-overview>Overview</button><button type="button" data-nav-only>${threadOnly ? "Show all" : "This thread only"}</button></div>`;
+  nav.innerHTML = html;
+  if (hadFocus) { const next = document.getElementById("threadNavSearch"); next.focus(); next.setSelectionRange(filter.length, filter.length); }
+  if (tEditing !== null) { const edit = document.getElementById("threadNavName"); if (edit && !hadFocus) { edit.focus(); edit.select(); } }
+}
 const laneShown = l => !threadOnly || l === (curThread || me);
 function laneEl(div, lane) {
   if (!div) return;
@@ -2079,6 +2177,7 @@ function setThread(l, quiet) {
   if (!quiet) input.focus();
 }
 function drawThreads() {
+  drawThreadSidebar();
   const el = document.getElementById("tbar");
   const mine = myThreads();
   const sig = JSON.stringify([curThread, threadOnly, tEditing, mine.map(t => [t.id, t.name]), Object.keys(busy).filter(l => owner(l) === me), metaRev, [...doneUnseen], tbarAll, settings.compactBar, tmenuOpen, pinsOpen, ((laneMeta[curThread || me] || {}).pins || []).length, myStars.length]);
@@ -2110,6 +2209,7 @@ function drawThreads() {
       + `<button class="tchip ticon" data-tcards title="Every thread as a card (Threads view)">▦</button>`
       + `<button class="tchip ticon" data-tview title="Overview: what every thread is for and what it did">☰</button>`
       + (myStars.length ? `<button class="tchip ticon" data-tsaved title="Messages you saved">★${myStars.length}</button>` : "")
+      + `<button class="tchip ticon" data-thread-placement-toggle title="Move threads to the left column">&#8617;</button>`
       + `<button class="tchip ticon" data-tbarfull title="Show all threads and pins in full rows">⤢</button>`;
     const box0 = document.getElementById("tname");
     if (box0) { box0.focus(); box0.select(); }
@@ -2130,6 +2230,7 @@ function drawThreads() {
     + `<button class="tchip tview" data-tcards title="Every thread as a card (Threads view)">▦ Cards</button>`
     + `<button class="tchip tview" data-tview title="What every thread is for and what it has done">☰ Overview</button>`
     + (myStars.length ? `<button class="tchip tview" data-tsaved title="Messages you saved">★ ${myStars.length}</button>` : "")
+    + `<button class="tchip ticon" data-thread-placement-toggle title="Move threads to the left column">&#8617; Threads left</button>`
     + `<button class="tchip ticon" data-tbarcompact title="One compact row">⤡</button>`
     + ((laneMeta[curThread || me] || {}).goal ? `<span class="tgoal" title="${esc("What this thread is for (Claude reads it every turn):\n" + laneMeta[curThread || me].goal)}">🎯 ${esc(laneMeta[curThread || me].goal)}</span>` : "");
   const box = document.getElementById("tname");
@@ -2142,7 +2243,60 @@ function setBarMode(compact) {
 document.addEventListener("click", e => {   // the thread menu closes when you click elsewhere
   if (tmenuOpen && e.target.isConnected && !e.target.closest("#tbar")) { tmenuOpen = false; tbarSig = ""; drawThreads(); }
 });
+document.getElementById("threadSidebar").addEventListener("input", e => {
+  if (e.target.id === "threadNavSearch") drawThreadSidebar();
+});
+document.getElementById("threadNavNew").addEventListener("click", () => { tEditing = "new"; threadNavDraft = ""; drawThreads(); });
+document.getElementById("threadSidebar").addEventListener("click", e => {
+  if (e.target.closest("[data-thread-placement-toggle]")) { setThreadPlacement("bottom"); return; }
+  const rename = e.target.closest("[data-nav-rename]");
+  if (rename) { tEditing = rename.dataset.navRename; threadNavDraft = threads.find(t => t.id === tEditing)?.name || ""; drawThreads(); return; }
+  const archive = e.target.closest("[data-nav-archive]");
+  if (archive) { e.stopPropagation(); requestThreadArchive(archive.dataset.navArchive); return; }
+  const close = e.target.closest("[data-nav-close]");
+  if (close) { e.stopPropagation(); requestThreadArchive(close.dataset.navClose); return; }
+  if (e.target.closest("[data-nav-cards]")) { setView("threads"); return; }
+  if (e.target.closest("[data-nav-overview]")) { togglePanel("threadsPanel", drawThreadsPanel); return; }
+  if (e.target.closest("[data-nav-only]")) { threadOnly = !threadOnly; try { localStorage.setItem("room-thread-only", threadOnly ? "1" : "0"); } catch {} drawThreads(); applyThreadFilter(); return; }
+  const reopen = e.target.closest("[data-nav-reopen]");
+  if (reopen) { e.stopPropagation(); const lane = reopen.dataset.navReopen || reopen.dataset.navThread; if (lane) reopenThread(lane, true); return; }
+  const pick = e.target.closest("[data-nav-thread]");
+  if (pick && !pick.dataset.navReopen) setThread(pick.dataset.navThread === me ? "" : pick.dataset.navThread);
+});
+document.getElementById("threadSidebar").addEventListener("dblclick", e => {
+  const pick = e.target.closest("[data-nav-thread]");
+  if (pick && !pick.dataset.navReopen && pick.dataset.navThread !== me) { tEditing = pick.dataset.navThread; threadNavDraft = threads.find(t => t.id === tEditing)?.name || ""; drawThreads(); }
+});
+document.getElementById("threadSidebar").addEventListener("input", e => { if (e.target.id === "threadNavName") threadNavDraft = e.target.value; });
+document.getElementById("threadSidebar").addEventListener("keydown", e => {
+  if (e.target.id !== "threadNavName") return;
+  if (e.key === "Enter") {
+    const value = e.target.value.trim(), lane = e.target.dataset.navEdit || "";
+    if (value && tEditing === "new") post("/thread", { op: "create", name: value });
+    else if (value && lane) post("/thread", { op: "rename", thread: lane, name: value });
+    tEditing = null; threadNavDraft = ""; drawThreads();
+  } else if (e.key === "Escape") { tEditing = null; threadNavDraft = ""; drawThreads(); }
+});
+document.getElementById("threadSidebar").addEventListener("focusout", e => {
+  if (e.target.id === "threadNavName") setTimeout(() => { if (tEditing !== null && !document.getElementById("threadSidebar").contains(document.activeElement)) { tEditing = null; threadNavDraft = ""; drawThreads(); } }, 150);
+});
+function requestThreadArchive(lane) {
+  const t = threads.find(x => x.id === lane);
+  if (!t || t.owner !== me || busy[lane]) return;
+  const reason = t.archive_reason ? `\n\nReason: ${t.archive_reason}` : "";
+  if (!confirm(`Archive “${t.name}”? Its history will be kept and you can reopen it any time.${reason}`)) return;
+  post("/thread", { op: "close", thread: lane });
+  if (curThread === lane) setThread("");
+}
+function reopenThread(lane, switchTo = false) {
+  const t = threads.find(x => x.id === lane);
+  if (!t || t.owner !== me || !t.closed) return;
+  post("/thread", { op: "reopen", thread: lane }).then(() => {
+    if (switchTo) setTimeout(() => setThread(lane), 150);
+  });
+}
 document.getElementById("tbar").addEventListener("click", e => {
+  if (e.target.closest("[data-thread-placement-toggle]")) { setThreadPlacement("left"); return; }
   if (e.target.closest("[data-tcards]")) { e.stopPropagation(); tmenuOpen = false; tbarSig = ""; drawThreads(); setView(view === "threads" ? "chat" : "threads"); return; }
   if (e.target.closest("[data-tmenu]")) { tmenuOpen = !tmenuOpen; tbarSig = ""; drawThreads(); return; }
   if (e.target.closest("[data-tpins]")) { pinsOpen = !pinsOpen; tbarSig = ""; drawThreads(); drawThreadPins(); return; }
@@ -2155,8 +2309,7 @@ document.getElementById("tbar").addEventListener("click", e => {
   if (close) {
     e.stopPropagation();
     const l = close.dataset.tclose;
-    post("/thread", { op: "close", thread: l });
-    if (curThread === l) setThread("");
+    requestThreadArchive(l);
     return;
   }
   const pick = e.target.closest("[data-tsel]");
@@ -3299,8 +3452,21 @@ document.getElementById("pin").addEventListener("input", () => {   // the palett
   }, 250);
 });
 function openHit(m) {
-  if (msgEl(m.id)) return jumpTo(m.id);
-  toastCard("info", `${m.who} · ${new Date(m.ts * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`, m.snip);
+  const lane = String(m.lane || ""), own = lane === me || owner(lane) === me;
+  const where = lane === me ? "Main" : lane ? laneLabel(lane) : "Unknown conversation";
+  const when = new Date(m.ts * 1000).toLocaleString([], { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const t = threads.find(x => x.id === lane);
+  if (own && t?.closed) {
+    toastCard("info", `${where} · ${when}`, m.snip, [["Reopen thread", () => reopenThread(lane, true)]]);
+    return;
+  }
+  if (own) {
+    setThread(lane === me ? "" : lane, true);
+    setView("chat");
+    requestAnimationFrame(() => msgEl(m.id) ? jumpTo(m.id) : toastCard("info", `${where} · ${when}`, m.snip));
+    return;
+  }
+  toastCard("info", `${where} · ${m.who} · ${when}`, m.snip);
 }
 
 // =================================================================== 🤖 AI panel: rules for Claude, whose account runs my turns
@@ -4459,8 +4625,11 @@ function paletteItems(qs) {
     run: () => { tlFlashId = e.id; tlFilter = ""; setView("timeline"); } })) : [];
   const fl = files.filter(x => hit(x.name)).slice(0, 8).map(x => ({ g: "Files", ic: "📎", t: x.name, s: x.by, run: () => window.open(q("/file/" + x.id) + "&inline=1", "_blank") }));
   const msgs = f && msgHits.q === qs.trim() ? msgHits.items.map(m => ({ g: "Messages", ic: m.who === "Claude" ? "✻" : "💬", t: m.snip,
-    s: `${m.who} · ${new Date(m.ts * 1000).toLocaleDateString([], { day: "numeric", month: "short" })}`, run: () => openHit(m) })) : [];
-  return f ? [...cards, ...moments, ...msgs, ...boards, ...fl, ...acts] : [...acts.slice(0, 9), ...boards, ...cards.slice(0, 5)];
+    s: `${m.lane === me ? "Main" : laneLabel(m.lane)} · ${m.who} · ${new Date(m.ts * 1000).toLocaleDateString([], { day: "numeric", month: "short" })}`, run: () => openHit(m) })) : [];
+  const foundThreads = f ? threads.filter(t => t.owner === me && t.name.toLowerCase().includes(f)).slice(0, 12)
+    .map(t => ({ g: "Threads", ic: t.closed ? "🗄" : "#", t: t.name, s: t.closed ? "Archived · reopen" : "Open thread",
+      run: () => t.closed ? reopenThread(t.id, true) : (setThread(t.id), setView("chat")) })) : [];
+  return f ? [...foundThreads, ...cards, ...moments, ...msgs, ...boards, ...fl, ...acts] : [...acts.slice(0, 9), ...boards, ...cards.slice(0, 5)];
 }
 function drawPalette() {
   pItems = paletteItems(pin.value); pSel = Math.min(pSel, Math.max(0, pItems.length - 1));
@@ -6388,7 +6557,7 @@ function tvRowsAll() {
   const people = Object.keys(colors || {});
   if (me && !people.includes(me)) people.unshift(me);
   const rows = people.map(p => ({ lane: p, owner: p, name: "Main", ts: 0 }));
-  for (const t of threads) if (t && t.id) rows.push({ lane: t.id, owner: t.owner || owner(t.id), name: t.name || threadName(t.id), closed: !!t.closed, archived: t.archived || 0, ts: t.ts || 0 });
+  for (const t of threads) if (t && t.id) rows.push({ lane: t.id, owner: t.owner || owner(t.id), name: t.name || threadName(t.id), closed: !!t.closed, archived: t.archived || 0, archive_warning: !!t.archive_warning, archive_reason: t.archive_reason || "", ts: t.ts || 0 });
   return rows.filter(r => tvWho !== "me" || r.owner === me);
 }
 function tvTree(rows) {   // sub-threads under their parent; working first, then idle by last activity
@@ -6487,7 +6656,7 @@ function tvRowHtml(r, L) {
   const tag = card ? `<button class="tvCardC" data-tvcard="${esc(card.id)}" title="${esc(`The card it works on: #${card.num} ${card.title} · ${colTitleOf(card)}`)}">#${esc(card.num)} ${esc(card.title)}</button>`
     : m.goal ? `<span class="tvGoal" title="${esc(m.goal)}">${esc(m.goal)}</span>` : "";
   const act = !mine ? "" : r.closed ? `<button class="tvBtn" data-tvreopen="${esc(lane)}" title="Bring it back to your thread bar">reopen</button>`
-    : `<button class="tvBtn" data-tvopen="${esc(lane)}" title="Switch the chat to this thread">open</button>`;
+    : `${r.archive_warning ? `<button class="tvBtn warn" data-tvarc="${esc(lane)}" title="Review archive suggestion">⚠ archive?</button>` : ""}<button class="tvBtn" data-tvopen="${esc(lane)}" title="Switch the chat to this thread">open</button>`;
   const head = `<div class="tvHead" data-k="h:${esc(lane)}"><i class="tvDot"></i><span class="tvName" title="${esc(laneLabel(lane) || r.name)}">`
     + `${r.owner !== me ? `<span class="tvOwn">${esc(r.owner)} · </span>` : ""}${esc(r.name)}</span>${tag}`
     + `<span class="tvWhen" data-tvwhen="${esc(lane)}"></span>${act}<button class="tvBtn tvChev" data-tvexp title="${exp ? "Fold" : "Open in full"}" aria-label="${exp ? "Fold" : "Open in full"}">${TV_CHEV}</button></div>`;
@@ -6610,7 +6779,7 @@ function tvTick() {
   if (badge && badge.textContent !== (n ? String(n) : "")) badge.textContent = n ? n : "";
   if (view !== "threads") return;
   const sig = JSON.stringify([me, curThread, Object.keys(busy).sort(), [...doneUnseen].sort(), metaRev, Object.keys(colors || {}),
-    threads.map(t => [t.id, t.name, !!t.closed, t.archived || 0])]);
+    threads.map(t => [t.id, t.name, !!t.closed, t.archived || 0, !!t.archive_warning])]);
   if (sig !== tvSig) { if (tvSig) tvSoon(); tvSig = sig; }
   tvEl.querySelectorAll("[data-tvwhen]").forEach(s => { const t = tvWhenText(s.dataset.tvwhen); if (s.textContent !== t) s.textContent = t; });
   if (tvPrevFor && !tvPrevFor.isConnected) tvHidePrev();
@@ -6696,6 +6865,7 @@ tvEl.addEventListener("click", e => {
   if (o) { tvOpenThread(o.dataset.tvopen); return; }
   const ro = t.closest("[data-tvreopen]");
   if (ro) { post("/thread", { op: "reopen", thread: ro.dataset.tvreopen }); toast("Reopened: it's back in your thread bar"); return; }
+  const ar = t.closest("[data-tvarc]"); if (ar) { e.stopPropagation(); requestThreadArchive(ar.dataset.tvarc); return; }
   const sg = t.closest("[data-tvsteps]");
   if (sg) { const k = sg.dataset.tvsteps; if (!tvStepsOpen.delete(k)) tvStepsOpen.add(k); tvRender(lane); return; }
   if (t.closest("[data-tvstepsall]")) { tvAllSteps = lane; tvExpanded = lane; tvRender(lane); return; }

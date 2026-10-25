@@ -419,9 +419,9 @@ collision covers the spawn pads sends every player to the wrong place). So:
   happens again (one concrete line: "an imported mesh gets one convex hull
   by default: set complex collision before placing it near spawns").
 - The room tidies up: a card that reaches Done is unpinned from every thread
-  (its pictures go onto its timeline moment); a thread idle 24 h with no open
-  card is archived (a sub-thread: 2 h after its last report). The people can
-  reopen it. So pin what this work needs, and finish cards when they're done.
+  (its pictures go onto its timeline moment). Idle threads stay visible; after
+  the idle period they get an archive warning. Only the owner confirms archiving,
+  and can reopen it later. So pin what this work needs, and finish cards when they're done.
 
 ## Lessons the threads learned
 @lessons.md
@@ -683,8 +683,20 @@ USAGE_EVERY = 150   # seconds between looks at the host's plan usage (and right 
 USAGE_WARN = (80, 95)   # percent: everyone gets a notification when a limit crosses these
 
 
-def credentials_path():
-    base = os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
+HOST_CLAUDE_CONFIG = ""   # room.json host_claude_config: the config dir of the personal account (host_oauth_token's login)
+# The host's two Claude plans; the Usage panel switches between them (room.json host_account).
+# personal = host_oauth_token (claude setup-token); team = the PC's own ~/.claude login (team plan).
+HOST_ACCOUNTS = {"personal": "Personal", "team": "Team"}
+TEAM_STOP_DEFAULT = 35   # percent: on the team plan, Claude stops once its week reaches this (room.json team_stop_percent)
+TEAM_NEAR = 5            # percent below the stop line where the room looks at usage more often
+TEAM_NEAR_EVERY = 30     # seconds between those looks
+
+
+def credentials_path(account="personal"):
+    if account == "team":
+        base = os.path.join(os.path.expanduser("~"), ".claude")
+    else:
+        base = HOST_CLAUDE_CONFIG or os.environ.get("CLAUDE_CONFIG_DIR") or os.path.join(os.path.expanduser("~"), ".claude")
     return os.path.join(base, ".credentials.json")
 
 
@@ -695,9 +707,9 @@ def iso_ts(text):
         return None
 
 
-def fetch_usage():
+def fetch_usage(account="personal"):
     """The host's Claude plan limits: the numbers Claude Code's /usage shows, read with Claude's own login."""
-    with open(credentials_path(), encoding="utf-8") as f:
+    with open(credentials_path(account), encoding="utf-8") as f:
         login = json.load(f).get("claudeAiOauth") or {}
     req = urllib.request.Request(USAGE_URL, headers={"Authorization": "Bearer " + login.get("accessToken", ""),
                                                      "anthropic-beta": "oauth-2025-04-20", "User-Agent": "claude-room"})
@@ -831,7 +843,7 @@ RELEASE_NOTES = {   # shown with "update available" in the browser and the termi
     39: "✅ for a finished task now sits on the AI's answer; mute the approval sound just for you (Settings, or /sound approvals off in chat.py); the host can clear the people chat (🧹).",
     38: "A thread's goal now comes from its card; the terminal never updates itself in the middle of an action, and commands that only read no longer wait behind another thread's long change.",
     37: "One compact row above the message box: a thread switcher with every thread (and how many work or finished), pins behind 📌, ⤢ for the full rows.",
-    36: "Pins and threads tidy themselves: a finished card leaves the pins (its pictures go to the timeline), idle threads are archived and can be reopened from the Overview.",
+    36: "Finished cards leave the pins; idle threads stay visible with an archive warning until their owner confirms.",
     35: "Threads work as a team: a thread can open its own sub-threads for parts of a task (you see them and can talk to them), get their reports back, keep a checklist, and save lessons every thread learns from.",
     33: "Zones: threads mark the spots they depend on (spawns, the key, camera marks) and nobody can build over them; the playtest log is watched; Check In, Sync and closing UEFN wait while other threads work.",
     32: "📝 Meetings tab: every recorded meeting with its summary, transcript and audio, new meetings recorded right in the room, drag a meeting or a line into the chat, and Claude looks up what was said in meetings by itself.",
@@ -946,6 +958,8 @@ class Room:
         self.stopping = set()        # lanes /stop just killed: their exit isn't an error
         self.halted = set()          # lanes /stop hit: no tidy-up compaction after, the person wants to go on
         self.usage = None            # the host's plan usage: {"limits": [...], "plan", "ts", "error"}
+        self.usage_sig = ""
+        self.usage_by = {}           # host account -> its usage (both are watched; self.usage is the one in use)
         self.usage_kick = threading.Event()
         self.usage_warned = {}       # limit kind -> (highest warning sent, its window's reset time)
         self.board_lock = threading.Lock()
@@ -1244,11 +1258,11 @@ class Room:
         if op == "create":
             title = clean_text(body.get("name"), 40) or "New thread"
             slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:24] or secrets.token_hex(3)
-            self.make_room_for_thread(name)   # 12 open: the oldest idle one is archived first
+            self.make_room_for_thread(name)   # at the limit, mark an idle candidate and let its owner choose
             with self.state_lock:
                 threads = self.state.setdefault("threads", {})
                 if sum(1 for t in threads.values() if t["owner"] == name and not t.get("closed")) >= 12:
-                    return False, "you have 12 open threads: close one first"
+                    return False, "you have 12 open threads: review an archive warning and confirm one if you want to make room"
                 lane, n = f"{name}/{slug}", 2
                 while lane in threads:
                     lane, n = f"{name}/{slug}-{n}", n + 1
@@ -1288,6 +1302,14 @@ class Room:
                 return False, "Claude is still working in that thread: wait for it or /stop it first"
             with self.state_lock:
                 t["closed"] = op == "close"
+                if op == "close":
+                    t["archived"] = time.time()
+                    t.pop("archive_warning", None)
+                    t.pop("archive_reason", None)
+                else:
+                    t.pop("archived", None)
+                    t.pop("archive_warning", None)
+                    t.pop("archive_reason", None)
                 save_json(STATE, self.state)
             self.broadcast({"t": "threads", "threads": self.threads_view()})
             self.broadcast({"t": "sys", "text": f"{name} {'closed' if op == 'close' else 'reopened'} the thread “{t['name']}”"},
@@ -1295,7 +1317,7 @@ class Room:
             return True, lane
         return False, f"unknown thread op {op!r}"
 
-    # ---- tidying: finished cards leave the pins, idle threads are archived ----
+    # ---- tidying: finished cards leave pins; idle threads get an archive warning ----
     def goal_from_card(self, lane):
         """A goal the room took from the thread's first message gives way to its open card's title."""
         m = self.lane_meta(lane)
@@ -1349,14 +1371,16 @@ class Room:
         return not self.lane_cards(lane) and time.time() - self.lane_last_ts(lane) >= idle
 
     def archive(self, lane, why):
+        """Suggest archiving an idle thread without hiding it; the owner must confirm."""
         with self.state_lock:
             t = self.state.get("threads", {}).get(lane)
-            if not t or t.get("closed"):
+            if not t or t.get("closed") or t.get("archive_warning"):
                 return False
-            t["closed"], t["archived"] = True, time.time()
+            t["archive_warning"] = time.time()
+            t["archive_reason"] = str(why)[:180]
             save_json(STATE, self.state)
         self.broadcast({"t": "threads", "threads": self.threads_view()})
-        self.broadcast({"t": "sys", "text": f"🗄 archived # {t['name']} ({why}) · reopen it from ☰ Overview"}, keep=True)
+        self.broadcast({"t": "sys", "text": f"⚠ # {t['name']} is idle and still open. Review the warning beside it if you want to archive it."}, keep=True)
         return True
 
     def make_room_for_thread(self, person):
@@ -2947,25 +2971,108 @@ class Room:
                                            ".bat again to get it"})
 
     # ---- the host's Claude plan usage (everyone in the room spends it) ----------
+    def host_account(self):
+        acct = self.cfg.get("host_account") or ("personal" if self.cfg.get("host_oauth_token") else "team")
+        return acct if acct in HOST_ACCOUNTS and (acct == "team" or self.cfg.get("host_oauth_token")) else "team"
+
+    def apply_host_account(self):
+        """New Claude runs inherit this: the personal plan's token, or none (the PC's own team login)."""
+        if self.host_account() == "personal":
+            os.environ["CLAUDE_CODE_OAUTH_TOKEN"] = self.cfg["host_oauth_token"]
+        else:
+            os.environ.pop("CLAUDE_CODE_OAUTH_TOKEN", None)
+
+    def team_stop(self):
+        try:
+            return max(1, min(100, int(self.cfg.get("team_stop_percent") or TEAM_STOP_DEFAULT)))
+        except (TypeError, ValueError):
+            return TEAM_STOP_DEFAULT
+
+    def team_blocked(self, lane):
+        """On the team plan, past the stop line: its weekly limit, once it crossed it (empty = go on)."""
+        if self.host_account() != "team" or self.account_env(lane):   # a person on their own account isn't spending it
+            return []
+        line = self.team_stop()
+        return [l for l in (self.usage_by.get("team") or {}).get("limits", [])
+                if l["kind"] == "weekly_all" and l["percent"] >= line and (not l.get("resets") or l["resets"] > time.time())]
+
+    def team_near(self):
+        """On the team plan and close to its stop line: worth looking at usage more often."""
+        week = [l for l in (self.usage_by.get("team") or {}).get("limits", []) if l["kind"] == "weekly_all"]
+        return self.host_account() == "team" and any(l["percent"] >= self.team_stop() - TEAM_NEAR for l in week)
+
+    def stop_team_turns(self):
+        """Past the team stop line, turns already running on it stop too (new ones don't start)."""
+        with self.lock:
+            procs = [(lane, p) for lane, p in self.procs.items() if p and p.poll() is None]
+        hit = [(lane, p) for lane, p in procs if self.team_blocked(lane)]
+        if not hit:
+            return
+        lanes = {lane for lane, _ in hit}
+        with self.lock:
+            self.halted.update(lanes)
+        for entry in list(self.execs.values()):
+            if entry["lane"] in lanes:
+                entry["result"] = (False, "stopped by the room")
+                entry["started"].set()
+                entry["done"].set()
+        for lane, proc in hit:
+            self.stopping.add(lane)
+            kill_tree(proc)
+        self.broadcast({"t": "sys", "text": f"⏸ the team plan reached its stop line ({self.team_stop()}% of the week), "
+                        f"so {', '.join(map(self.lane_label, sorted(lanes)))} stopped. {self.cfg['host']} can switch to "
+                        "the personal plan in ◔ Usage."}, keep=True)
+
+    def set_host_account(self, name, account=None, stop=None):
+        if name != self.cfg["host"]:
+            return False, f"only {self.cfg['host']} (the host) can change which plan the room uses"
+        if account is not None:
+            if account not in HOST_ACCOUNTS:
+                return False, "unknown account"
+            if account == "personal" and not self.cfg.get("host_oauth_token"):
+                return False, "no personal token in room.json (host_oauth_token)"
+            self.cfg["host_account"] = account
+        if stop is not None:
+            try:
+                self.cfg["team_stop_percent"] = max(1, min(100, int(stop)))
+            except (TypeError, ValueError):
+                return False, "the stop line is a percent, 1-100"
+        save_json(CONFIG, self.cfg)
+        self.apply_host_account()
+        self.usage = self.usage_by.get(self.host_account()) or self.usage
+        if account is not None:   # a new stop line only redraws the panel; a switch is news for everyone
+            self.usage_warned = {}
+            self.broadcast({"t": "sys", "text": f"🔀 {name}: Claude turns run on {HOST_ACCOUNTS[self.host_account()]}"
+                            + (f", stopping at {self.team_stop()}%" if self.host_account() == "team" else "")}, keep=True)
+        self.push_usage()
+        self.usage_kick.set()
+        return True, ""
+
     def watch_usage(self):
         while True:
-            try:
-                fresh, error = fetch_usage(), ""
-            except (OSError, ValueError, KeyError, TypeError) as e:   # offline, login expired (the next turn renews it), ...
-                fresh, error = None, (f"HTTP {e.code}" if isinstance(e, urllib.error.HTTPError) else type(e).__name__)
-            old = self.usage or {}
-            if fresh:
-                self.usage = {**fresh, "ts": time.time(), "error": ""}
-            elif old:
-                self.usage = {**old, "error": error}
-            else:
-                self.usage = {"limits": [], "plan": "", "ts": 0, "error": error}
-            sig = lambda u: (json.dumps(u.get("limits"), sort_keys=True), u.get("error"))  # noqa: E731
-            if sig(self.usage) != sig(old):
-                self.broadcast({"t": "usage", "usage": self.usage})
-            if fresh:
-                self.usage_warnings(fresh["limits"])
-            self.usage_kick.wait(USAGE_EVERY)
+            for acct in HOST_ACCOUNTS:
+                if acct == "personal" and not self.cfg.get("host_oauth_token"):
+                    continue
+                try:
+                    fresh, error = fetch_usage(acct), ""
+                except (OSError, ValueError, KeyError, TypeError) as e:   # offline, login expired (the next turn renews it), ...
+                    fresh, error = None, (f"HTTP {e.code}" if isinstance(e, urllib.error.HTTPError) else type(e).__name__)
+                old = self.usage_by.get(acct) or {}
+                if fresh:
+                    self.usage_by[acct] = {**fresh, "ts": time.time(), "error": ""}
+                elif old:
+                    self.usage_by[acct] = {**old, "error": error}
+                else:
+                    self.usage_by[acct] = {"limits": [], "plan": "", "ts": 0, "error": error}
+            self.usage = self.usage_by.get(self.host_account()) or {"limits": [], "plan": "", "ts": 0, "error": ""}
+            sig = json.dumps({a: (u.get("limits"), u.get("error")) for a, u in self.usage_by.items()}, sort_keys=True)
+            if sig != self.usage_sig:
+                self.usage_sig = sig
+                self.push_usage()
+            if self.usage.get("limits") and not self.usage.get("error"):
+                self.usage_warnings(self.usage["limits"])
+            self.stop_team_turns()
+            self.usage_kick.wait(TEAM_NEAR_EVERY if self.team_near() else USAGE_EVERY)
             self.usage_kick.clear()
             time.sleep(15)   # a burst of turns ending still means one look
 
@@ -2995,7 +3102,7 @@ class Room:
     def compact_lane(self, lane, how=COMPACT_HOW):
         """Claude Code's /compact on a thread's own session: a summary replaces the long history.
         Every request re-reads the whole conversation, so this is what keeps usage down."""
-        if ai_paused():
+        if ai_paused() or self.team_blocked(lane):
             return "stopped"
         with self.state_lock:
             generation = self.generation
@@ -3076,7 +3183,10 @@ class Room:
                 for k, v in sorted(lanes.items()) if k not in closed]
 
     def usage_view(self):
-        return {**(self.usage or {}), "contexts": self.contexts_view(), "compact_at": self.cfg.get("compact_at") or 0}
+        accounts = [{"id": a, "label": HOST_ACCOUNTS[a], **{k: (self.usage_by.get(a) or {}).get(k) for k in ("limits", "plan", "ts", "error")}}
+                    for a in HOST_ACCOUNTS if a == "team" or self.cfg.get("host_oauth_token")]
+        return {**(self.usage or {}), "contexts": self.contexts_view(), "compact_at": self.cfg.get("compact_at") or 0,
+                "account": self.host_account(), "accounts": accounts, "team_stop": self.team_stop()}
 
     def push_usage(self):
         self.broadcast({"t": "usage", "usage": self.usage_view(), "ai_paused": ai_paused()})
@@ -3103,6 +3213,17 @@ class Room:
         if not text and not attached:
             return
         lane = self.lane_of(name, thread)
+        cleared_archive_warning = False
+        if "/" in lane:
+            with self.state_lock:
+                t = self.state.get("threads", {}).get(lane)
+                if t and t.get("archive_warning"):
+                    t.pop("archive_warning", None)
+                    t.pop("archive_reason", None)
+                    save_json(STATE, self.state)
+                    cleared_archive_warning = True
+            if cleared_archive_warning:
+                self.broadcast({"t": "threads", "threads": self.threads_view()})
         if text.startswith("/") and not attached and self.command(name, text, lane):
             return
         said = text or ("(see the attached " + ("picture" if all(a["image"] for a in attached) else "file") + ("s)" if len(attached) > 1 else ")"))
@@ -3618,7 +3739,7 @@ class Room:
             return text
         with self.lock:
             own = list(self.exec_tokens)
-        for secret in [*self.cfg["people"].values(), self.cfg.get("dev_token", ""), (self.cfg.get("codex_bridge") or {}).get("key", ""), (self.cfg.get("gemini_bridge") or {}).get("key", ""), *own, *self.secret_values()]:
+        for secret in [*self.cfg["people"].values(), self.cfg.get("dev_token", ""), self.cfg.get("host_oauth_token", ""), (self.cfg.get("codex_bridge") or {}).get("key", ""), (self.cfg.get("gemini_bridge") or {}).get("key", ""), *own, *self.secret_values()]:
             if secret and len(secret) >= 12:
                 text = text.replace(secret, "[hidden]")
         return SECRET_RE.sub("[hidden key]", text)
@@ -5228,6 +5349,13 @@ class Room:
     def _ask_claude(self, lane, prompt, token):
         if ai_paused():
             return [], False
+        over = self.team_blocked(lane)
+        if over:
+            text = (f"⏸ Not started: the room is on the team plan and it reached the stop line ({self.team_stop()}%): "
+                    + ", ".join(f"{l['label'].lower()} {l['percent']}%, resets {until_text(l['resets'])}" for l in over)
+                    + f". {self.cfg['host']} can switch to the personal plan or move the line in ◔ Usage.")
+            self.broadcast({"t": "delta", "text": text, "lane": lane})
+            return [["text", text]], False
         mcp = {"mcpServers": {"room": {
             "command": sys.executable, "args": [os.path.join(ROOT, "room_mcp.py")],
             "env": {"ROOM_URL": f"http://127.0.0.1:{self.cfg['port']}", "ROOM_EXEC_TOKEN": token}}}}
@@ -6214,6 +6342,10 @@ def make_handler(room):
                     f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} diag {name}: {str(body.get('text', ''))[:500]}\n")
             elif path == "/board":
                 room.board_op(name, body)
+            elif path == "/host_account":   # the Usage panel: which of the host's plans Claude runs on, and the team stop line
+                ok, msg = room.set_host_account(name, body.get("account"), body.get("stop"))
+                if not ok:
+                    room.send_to(name, {"t": "sys", "text": msg})
             elif path == "/settings":   # the model / effort picker
                 room.set_pref(name, model=body.get("model"), effort=body.get("effort"), mute_approval=body.get("mute_approval_sound"))
             elif path == "/locks":
@@ -6334,6 +6466,9 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8", errors="replace", line_buffering=True)
     os.makedirs(WORKSPACE, exist_ok=True)
     cfg = load_config()
+    os.environ.pop("CLAUDE_CODE_OAUTH_TOKEN", None)   # Room.apply_host_account sets it from the Usage panel's choice
+    global HOST_CLAUDE_CONFIG
+    HOST_CLAUDE_CONFIG = cfg.get("host_claude_config") or ""
     argv = sys.argv[1:]
     if argv[:1] == ["invite"] and len(argv) > 1:
         name = argv[1].lower()
@@ -6355,6 +6490,7 @@ def main():
                 f.write(start)
 
     room = Room(cfg)
+    room.apply_host_account()
     from room_idle_shutdown import attach
     attach(room, ROOT)
     threading.Thread(target=room.worker, daemon=True).start()
